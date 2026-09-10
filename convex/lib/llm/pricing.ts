@@ -26,12 +26,15 @@ export function priceFor(model: string): ModelPrice {
   return MODEL_PRICES[model] ?? FALLBACK_PRICE;
 }
 
-/** Cost in USD for one call; batch traffic is billed at 50%. */
+/** Anthropic web search: $10 per 1,000 searches (plus normal tokens). */
+export const WEB_SEARCH_USD_PER_REQUEST = 0.01;
+
+/** Cost in USD for one call; batch traffic is billed at 50% (search requests are not discounted). */
 export function computeCostUsd(model: string, usage: LlmUsage, batch = false): number {
   const p = priceFor(model);
   const raw =
     (usage.inputTokens * p.input + usage.outputTokens * p.output + usage.cacheReadTokens * p.cacheRead + usage.cacheWriteTokens * p.cacheWrite) /
     1_000_000;
-  const cost = batch ? raw / 2 : raw;
+  const cost = (batch ? raw / 2 : raw) + (usage.webSearchRequests ?? 0) * WEB_SEARCH_USD_PER_REQUEST;
   return Math.round(cost * 1_000_000) / 1_000_000;
 }

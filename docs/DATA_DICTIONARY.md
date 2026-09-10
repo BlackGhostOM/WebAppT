@@ -1,4 +1,4 @@
-# قاموس البيانات — Data Dictionary (المخطط 1.0)
+# قاموس البيانات — Data Dictionary (المخطط 1.1)
 
 المصدر التنفيذي: `convex/schema.ts` (المخطط)، `convex/lib/vocab.ts` (القيم المسموحة)، `lib/entities.ts` (النماذج/قواعد الإدخال اليدوي).
 الحساسية: PUBLIC · INTERNAL · CONFIDENTIAL · CUSTOMER_CONFIDENTIAL · STRICTLY_CONFIDENTIAL. الخطورة D1–D4 وفق `convex/lib/audit.ts`.
@@ -199,7 +199,7 @@ invoices, payments, refunds, profitability · qaReviews, riskRegister, complianc
 | `taskRuns` | taskId, stepIndex, kind, model?, toolName?, toolKind?, input?, output?, inputTokens?, outputTokens?, cacheReadTokens?, cacheWriteTokens?, costUsd?, durationMs?, approvalId?, subtaskId?, note?, createdAt | INTERNAL؛ سجل خطوة بخطوة |
 | `approvals` | businessId, kind, status, taskId?, agentSlug, title, summary, payload, editedPayload?, toolName?, targetTable?, targetRecordId?, severity, requestedAt, decidedAt?, decidedBy?, decisionReason? (إلزامي عند الرفض), executedAt?, executionResult?, executionError?, expiresAt? | INTERNAL؛ كل إجراء خارجي وكل D3/D4 |
 | `auditLog` | actor, table, recordId?, businessId?, event, oldValue?, newValue?, reason?, taskId?, approvalId?, severity, at | **إلحاقي فقط** — لا update/delete |
-| `usageLog` | taskId?, agentSlug, model, provider, origin, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd, batch, escalated, escalationReason?, monthKey, at | INTERNAL |
+| `usageLog` | taskId?, agentSlug, model, provider, origin, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, webSearchRequests? (1.1: عدد عمليات البحث الخادمية، 0.01$ لكل عملية), costUsd, batch, escalated, escalationReason?, monthKey, at | INTERNAL |
 | `toolRegistry` | name, kind (read/write_internal/external), description, inputSchema (JSON Schema), allowedAgents[], resource?, action?, severity, requiresApproval, enabled | INTERNAL |
 | `dataAccessMatrix` | agentSlug, resource, actions[], condition? (customer_in_task_context / not_strictly_confidential / estimated_only / active_only), fieldDenyList[], scope?, validTo?, grantedBy, grantedAt | **D4**؛ صفوف المالك لا يمسها bootstrap |
 | `dataConflicts` | businessId, table, recordId?, field, candidates[]{value, source, trustLevel, observedAt, contractual?, specificity?, verified?}, status, resolutionRule?, resolvedValue?, resolvedBy?, resolvedAt?, taskId?, createdBy, createdAt | INTERNAL؛ ترتيب الحسم ثابت |

@@ -133,7 +133,7 @@ export const recordModelCall = internalMutation({
     model: v.string(),
     provider: v.string(),
     origin: v.string(),
-    usage: v.object({ inputTokens: v.number(), outputTokens: v.number(), cacheReadTokens: v.number(), cacheWriteTokens: v.number() }),
+    usage: v.object({ inputTokens: v.number(), outputTokens: v.number(), cacheReadTokens: v.number(), cacheWriteTokens: v.number(), webSearchRequests: v.optional(v.number()) }),
     durationMs: v.number(),
     escalated: v.boolean(),
     escalationReason: v.optional(v.string()),
@@ -161,7 +161,7 @@ export const recordModelCall = internalMutation({
       cacheWriteTokens: args.usage.cacheWriteTokens,
       costUsd,
       durationMs: args.durationMs,
-      note: `stop_reason=${args.stopReason}${args.escalated ? ` escalated=${args.escalationReason}` : ""}`,
+      note: `stop_reason=${args.stopReason}${args.usage.webSearchRequests ? ` web_searches=${args.usage.webSearchRequests}` : ""}${args.escalated ? ` escalated=${args.escalationReason}` : ""}`,
     });
     await maybeNotifyBudgetThreshold(ctx);
     return costUsd;
@@ -196,6 +196,20 @@ export const runTool = internalMutation({
       if (fresh) await ctx.db.patch(taskId, { citations: [...fresh.citations, ...outcome.citations].slice(-100) });
     }
     return { content: outcome.content, isError: outcome.isError ?? false, createdSubtaskId: outcome.createdSubtaskId, waitingDecision: outcome.waitingDecision ?? false, approvalId: outcome.approvalId, cancelled: false };
+  },
+});
+
+/** Web sources surfaced by the model's server-side search become task citations (url + retrieval time). */
+export const addWebCitations = internalMutation({
+  args: { taskId: v.id("tasks"), sources: v.array(v.object({ url: v.string(), title: v.optional(v.string()), retrievedAt: v.number() })) },
+  handler: async (ctx, { taskId, sources }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task || sources.length === 0) return;
+    const known = new Set(task.citations.filter((c) => c.kind === "web").map((c) => (c as { url: string }).url));
+    const fresh = sources.filter((s) => !known.has(s.url)).map((s) => ({ kind: "web" as const, url: s.url, title: s.title, retrievedAt: s.retrievedAt }));
+    if (fresh.length === 0) return;
+    await ctx.db.patch(taskId, { citations: [...task.citations, ...fresh].slice(-100) });
+    await appendRunStep(ctx, taskId, { kind: "NOTE", note: `مصادر بحث ويب مسجّلة: ${fresh.length}`, output: fresh.slice(0, 20) });
   },
 });
 

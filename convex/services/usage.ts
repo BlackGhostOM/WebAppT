@@ -33,6 +33,7 @@ export async function logUsage(ctx: MutationCtx, input: LogUsageInput): Promise<
     outputTokens: input.usage.outputTokens,
     cacheReadTokens: input.usage.cacheReadTokens,
     cacheWriteTokens: input.usage.cacheWriteTokens,
+    webSearchRequests: input.usage.webSearchRequests ?? 0,
     costUsd,
     batch: input.batch ?? false,
     escalated: input.escalated ?? false,

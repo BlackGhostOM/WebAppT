@@ -7,27 +7,30 @@
  * cancellation can never leave a half-written record.
  */
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import { agentActor, type Actor } from "../lib/actor";
-import { appendAudit } from "../lib/audit";
 import { appError, errorMessage } from "../lib/errors";
-import { nextBusinessId } from "../lib/ids";
 import type { JsonSchema } from "../lib/llm/types";
 import * as V from "../lib/vocab";
 import { createApproval } from "../services/approvals";
-import { stampBase } from "../services/common";
 import {
+  activateProduct,
   addProductComponent,
+  archiveProductComponent,
   changeLeadStage,
   createQuoteDraft,
   createResearchRate,
   productCosting,
+  upsertItineraryDay,
 } from "../services/commercial";
 import { proposeMemory, recordConflict } from "../services/governance";
 import { keywordSearch, recordCitations, recordKnowledgeGap } from "../services/knowledge";
 import { createRecord, getRecord, listRecords, updateRecord } from "../services/records";
+import { computeKpis, pipelineReport } from "../services/reports";
+import { createCampaign, proposeFollowUp, scheduleContent } from "../services/sales";
 import { createTask, listActiveTasks } from "../services/tasks";
-import { monthlyUsage } from "../services/usage";
+
+export { computeKpis } from "../services/reports";
 
 export interface ToolSpec {
   name: string;
@@ -80,6 +83,15 @@ export const TOOL_SPECS: ToolSpec[] = [
   { name: "create_research_rate", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يسجّل سعراً استرشادياً من البحث. يُوسم ESTIMATED / E_AI_ESTIMATE تلقائياً ويتطلب رابط المصدر ووقت الرصد.", inputSchema: obj({ supplierId: str("معرّف المورد"), hotelId: str("معرّف الفندق (اختياري)"), experienceId: str("معرّف التجربة (اختياري)"), componentType: enumOf(V.COMPONENT_TYPES, "نوع المكوّن"), serviceType: str("رمز الخدمة مثل HOTEL_ROOM"), serviceDescription: str("وصف الخدمة"), roomType: str("نوع الغرفة (اختياري)"), rateBasis: enumOf(V.RATE_BASES, "أساس السعر"), amount: num("المبلغ"), currency: str("العملة"), season: enumOf(V.SEASONS, "الموسم"), validFrom: str("ISO (اختياري)"), validTo: str("ISO (اختياري)"), cancellationTerms: str("شروط الإلغاء إن ذُكرت"), sourceUrl: str("رابط المصدر"), notes: str("ملاحظات") }, ["supplierId", "componentType", "serviceType", "serviceDescription", "rateBasis", "amount", "currency", "season", "sourceUrl"]) },
   { name: "create_product_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ مسودة منتج/باقة (حالة DESIGN). التفعيل قرار المالك.", inputSchema: obj({ name: str("اسم المنتج"), nameEn: str("الاسم بالإنجليزية"), productType: enumOf(V.PRODUCT_TYPES, "النوع"), durationDays: int("عدد الأيام"), durationNights: int("عدد الليالي"), summary: str("ملخص"), destinationIds: arr(str("معرّف وجهة"), "الوجهات"), highlights: arr(str("نقطة"), "أبرز المعالم"), inclusions: arr(str("عنصر"), "يشمل"), exclusions: arr(str("عنصر"), "لا يشمل"), seasons: arr(enumOf(V.SEASONS, "موسم"), "المواسم"), supplierCost: money("تكلفة الموردين للفرد"), internalCost: money("التكلفة الداخلية للفرد"), minSellingPrice: money("الحد الأدنى لسعر البيع"), recommendedSellingPrice: money("السعر المقترح"), customerSellingPrice: money("سعر البيع للعميل"), targetMarginPercent: num("الهامش المستهدف %") }, ["name", "productType", "durationDays", "durationNights", "summary"]) },
   { name: "add_product_component", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يضيف مكوّناً لمسودة منتج (فندق/نقل/نشاط…) مع ربطه بسعر مورد إن وُجد.", inputSchema: obj({ productId: str("معرّف المنتج"), componentType: enumOf(V.COMPONENT_TYPES, "النوع"), description: str("الوصف"), dayNumber: int("اليوم (اختياري)"), quantity: num("الكمية"), unit: enumOf(V.RATE_BASES, "الوحدة"), supplierId: str("معرّف المورد (اختياري)"), hotelId: str("معرّف الفندق (اختياري)"), experienceId: str("معرّف التجربة (اختياري)"), rateId: str("معرّف السعر (اختياري)"), supplierCost: money("تكلفة المورد"), internalCost: money("التكلفة الداخلية"), minSellingPrice: money("الحد الأدنى"), recommendedSellingPrice: money("المقترح"), customerSellingPrice: money("سعر العميل") }, ["productId", "componentType", "description", "quantity", "unit"]) },
+  { name: "remove_product_component", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يؤرشف مكوّناً من مسودة منتج غير فعّال.", inputSchema: obj({ componentId: str("معرّف المكوّن") }, ["componentId"]) },
+  { name: "get_product_costing", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["product", "executive"], description: "التكلفة والهامش المحسوبان من مكوّنات المنتج، وعدد المكوّنات الاسترشادية، والبرنامج اليومي.", inputSchema: obj({ productId: str("معرّف المنتج") }, ["productId"]) },
+  { name: "update_product_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يعدّل حقول مسودة منتج (الاسم، الملخص، الشروط، المدة، الوجهات، المواسم، حقول التسعير الخمسة، الهامش المستهدف).", inputSchema: obj({ productId: str("معرّف المنتج"), name: str("الاسم"), nameEn: str("الاسم بالإنجليزية"), summary: str("ملخص"), terms: str("الشروط"), durationDays: int("عدد الأيام"), durationNights: int("عدد الليالي"), destinationIds: arr(str("معرّف وجهة"), "الوجهات"), highlights: arr(str("نقطة"), "أبرز المعالم"), inclusions: arr(str("عنصر"), "يشمل"), exclusions: arr(str("عنصر"), "لا يشمل"), seasons: arr(enumOf(V.SEASONS, "موسم"), "المواسم"), minPax: int("الحد الأدنى للأفراد"), maxPax: int("الحد الأقصى للأفراد"), supplierCost: money("تكلفة الموردين للفرد"), internalCost: money("التكلفة الداخلية للفرد"), minSellingPrice: money("الحد الأدنى لسعر البيع"), recommendedSellingPrice: money("السعر المقترح"), customerSellingPrice: money("سعر البيع للعميل"), targetMarginPercent: num("الهامش المستهدف %") }, ["productId"]) },
+  { name: "advance_product_status", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينقل المنتج عبر دورة حياته وفق التسلسل المسموح (IDEA→CONCEPT→DESIGN→COSTING→QA→APPROVAL→READY_FOR_SALE). التفعيل ACTIVE عبر request_product_activation فقط.", inputSchema: obj({ productId: str("معرّف المنتج"), status: enumOf(["CONCEPT", "DESIGN", "COSTING", "QA", "APPROVAL", "READY_FOR_SALE", "REVIEW", "ARCHIVED"], "الحالة الجديدة"), note: str("سبب الانتقال") }, ["productId", "status"]) },
+  { name: "upsert_itinerary_day", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يضيف أو يعدّل يوماً في البرنامج اليومي للمنتج (العنوان، الوصف، الوجهة، المعالم، الوجبات، فندق الإقامة).", inputSchema: obj({ productId: str("معرّف المنتج"), dayNumber: int("رقم اليوم"), title: str("عنوان اليوم"), description: str("وصف البرنامج"), destinationId: str("معرّف الوجهة (اختياري)"), attractionIds: arr(str("معرّف معلم"), "المعالم"), breakfast: { type: "boolean", description: "إفطار مشمول" }, lunch: { type: "boolean", description: "غداء مشمول" }, dinner: { type: "boolean", description: "عشاء مشمول" }, overnightHotelId: str("معرّف فندق الإقامة (اختياري)") }, ["productId", "dayNumber", "title", "description"]) },
+  { name: "request_product_activation", kind: "write_internal", severity: "D3", requiresApproval: false, approvalKind: "SENSITIVE_CHANGE", allowedAgents: ["product"], description: "يطلب من المالك تفعيل منتج READY_FOR_SALE للبيع؛ يُنشئ طلب اعتماد ولا يفعّل مباشرة.", inputSchema: obj({ productId: str("معرّف المنتج"), summary: str("ملخص جاهزية المنتج: المكوّنات، الهامش، المكوّنات الاسترشادية") }, ["productId"]) },
+  { name: "create_campaign", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["sales"], description: "ينشئ حملة تسويقية (مسودة) تُجمَّع تحتها منشورات تقويم المحتوى.", inputSchema: obj({ name: str("اسم الحملة"), objective: str("الهدف"), platforms: arr(enumOf(V.CONTENT_PLATFORMS, "منصة"), "المنصات"), startDate: str("ISO (اختياري)"), endDate: str("ISO (اختياري)"), targetAudience: str("الجمهور المستهدف"), budgetOmr: num("الميزانية بالريال (اختياري)"), productIds: arr(str("معرّف منتج"), "المنتجات المروَّجة") }, ["name", "objective", "platforms"]) },
+  { name: "propose_follow_up", kind: "write_internal", severity: "D3", requiresApproval: false, approvalKind: "SEND_CUSTOMER_MESSAGE", allowedAgents: ["sales"], description: "يقترح رسالة متابعة لعميل محتمل تُرسل بعد اعتماد المالك، ويحدّد موعد المتابعة.", inputSchema: obj({ leadId: str("معرّف العميل المحتمل"), channel: enumOf(V.CHANNELS, "القناة"), message: str("نص الرسالة بلغة العميل"), purpose: str("الغرض: تذكير/عرض/استفسار/شكر"), followUpAt: str("موعد المتابعة ISO (اختياري)") }, ["leadId", "channel", "message", "purpose"]) },
+  { name: "pipeline_report", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["sales", "executive"], description: "تقرير خط المبيعات من قاعدة البيانات: القمع حسب المرحلة، القيمة المتوقعة، عملاء بلا تواصل، متابعات متأخرة، عروض تنتهي قريباً، أسباب الخسارة، معدلات التحويل.", inputSchema: obj({ staleDays: int("عدد الأيام بلا تواصل لاعتبار العميل راكداً (افتراضي 7)") }) },
   { name: "create_lead", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["sales", "support"], description: "ينشئ عميلاً محتملاً جديداً.", inputSchema: obj({ contactName: str("الاسم"), contactPhone: str("الهاتف"), contactEmail: str("البريد"), channel: enumOf(V.CHANNELS, "القناة"), summary: str("ملخص الطلب"), customerId: str("معرّف العميل إن وُجد"), interestedProductId: str("معرّف المنتج المهتم به"), paxAdults: int("عدد البالغين"), paxChildren: int("عدد الأطفال") }, ["contactName", "channel"]) },
   { name: "update_lead_stage", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["sales"], description: "يغيّر مرحلة عميل محتمل وفق التسلسل المسموح؛ LOST يتطلب سبباً معيارياً.", inputSchema: obj({ leadId: str("معرّف العميل المحتمل"), stage: enumOf(V.LEAD_STAGES, "المرحلة الجديدة"), lostReason: enumOf(V.LOST_REASONS, "سبب الخسارة (إلزامي عند LOST)"), note: str("ملاحظة") }, ["leadId", "stage"]) },
   { name: "create_quote_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["sales"], description: "ينشئ مسودة عرض سعر من منتج فعّال (ACTIVE) فقط. يعيد تحذيرات الأسعار الاسترشادية/المنتهية.", inputSchema: obj({ leadId: str("معرّف العميل المحتمل"), productId: str("معرّف المنتج الفعّال"), pax: int("عدد الأفراد"), discountPercent: num("نسبة الخصم % (اختياري)"), validDays: int("مدة صلاحية العرض بالأيام") }, ["leadId", "productId", "pax"]) },
@@ -408,6 +420,102 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
         const costing = await productCosting(ctx, productId);
         return { content: json({ component: result.businessId, totals: costing.pricing, margin: costing.margin, estimatedComponents: costing.estimatedComponents }) };
       }
+      case "remove_product_component": {
+        const componentId = ctx.db.normalizeId("productComponents", s(input, "componentId") ?? "");
+        if (!componentId) return { content: "componentId غير صالح", isError: true };
+        await archiveProductComponent(ctx, actor, componentId);
+        return { content: "أُرشف المكوّن." };
+      }
+      case "get_product_costing": {
+        const productId = id(ctx, "products", s(input, "productId"));
+        if (!productId) return { content: "productId غير صالح", isError: true };
+        const product = await getRecord(ctx, actor, "products", productId, refs);
+        if (!product) return { content: "المنتج غير موجود", isError: true };
+        const costing = await productCosting(ctx, productId);
+        const itineraries = await ctx.db.query("itineraries").withIndex("by_product", (q) => q.eq("productId", productId)).take(60);
+        return {
+          content: json({
+            product: { businessId: product.businessId, name: product.name, version: product.version, status: product.status, pricing: product.pricing },
+            components: costing.components.map((c) => ({ id: c._id, businessId: c.businessId, componentType: c.componentType, description: c.description, dayNumber: c.dayNumber, quantity: c.quantity, unit: c.unit, rateTrust: c.rateTrust, trustLevel: c.trustLevel, pricing: c.pricing })),
+            totals: costing.pricing,
+            margin: costing.margin,
+            estimatedComponents: costing.estimatedComponents,
+            itinerary: itineraries.sort((a, b) => a.dayNumber - b.dayNumber).map((d) => ({ dayNumber: d.dayNumber, title: d.title, description: d.description, meals: d.meals, overnightHotelId: d.overnightHotelId })),
+          }),
+        };
+      }
+      case "update_product_draft": {
+        const productId = id(ctx, "products", s(input, "productId"));
+        if (!productId) return { content: "productId غير صالح", isError: true };
+        const patch: Record<string, unknown> = {};
+        for (const key of ["name", "nameEn", "summary", "terms"]) if (s(input, key) !== undefined) patch[key] = s(input, key);
+        for (const key of ["durationDays", "durationNights", "minPax", "maxPax", "targetMarginPercent"]) if (n(input, key) !== undefined) patch[key] = n(input, key);
+        for (const key of ["destinationIds", "highlights", "inclusions", "exclusions", "seasons"]) if (Array.isArray(input[key])) patch[key] = list(input, key);
+        for (const key of ["supplierCost", "internalCost", "minSellingPrice", "recommendedSellingPrice", "customerSellingPrice"]) if (input[key] !== undefined) patch[key] = input[key];
+        if (Object.keys(patch).length === 0) return { content: "لا حقول للتعديل", isError: true };
+        const result = await updateRecord(ctx, actor, "products", productId, patch, { contextRefs: refs });
+        return { content: result.approvalRequired ? `التعديل يتطلب اعتماد المالك (طلب ${result.approvalId}).` : `حُدّثت مسودة المنتج ${result.businessId}.` };
+      }
+      case "advance_product_status": {
+        const productId = id(ctx, "products", s(input, "productId"));
+        const status = s(input, "status");
+        if (!productId || !status) return { content: "productId/status غير صالح", isError: true };
+        if (status === "ACTIVE") return { content: "التفعيل يمر عبر request_product_activation", isError: true };
+        const result = await updateRecord(ctx, actor, "products", productId, { status }, { contextRefs: refs, reason: s(input, "note") });
+        return { content: result.approvalRequired ? `الانتقال يتطلب اعتماد المالك (طلب ${result.approvalId}).` : `انتقل المنتج ${result.businessId} إلى ${status}.` };
+      }
+      case "upsert_itinerary_day": {
+        const productId = id(ctx, "products", s(input, "productId"));
+        if (!productId) return { content: "productId غير صالح", isError: true };
+        const itineraryId = await upsertItineraryDay(ctx, actor, productId, {
+          dayNumber: n(input, "dayNumber") ?? 0,
+          title: s(input, "title") ?? "",
+          description: s(input, "description") ?? "",
+          destinationId: id(ctx, "destinations", s(input, "destinationId")),
+          attractionIds: list(input, "attractionIds").map((x) => ctx.db.normalizeId("attractions", x)).filter((x): x is Id<"attractions"> => !!x),
+          meals: { breakfast: input.breakfast === true, lunch: input.lunch === true, dinner: input.dinner === true },
+          overnightHotelId: id(ctx, "hotels", s(input, "overnightHotelId")),
+        });
+        return { content: `حُفظ اليوم ${n(input, "dayNumber")} في البرنامج (${itineraryId}).` };
+      }
+      case "request_product_activation": {
+        const productId = id(ctx, "products", s(input, "productId"));
+        if (!productId) return { content: "productId غير صالح", isError: true };
+        const product = await ctx.db.get(productId);
+        if (!product) return { content: "المنتج غير موجود", isError: true };
+        if (product.status !== "READY_FOR_SALE") return { content: `المنتج في حالة ${product.status}؛ انقله إلى READY_FOR_SALE أولاً عبر advance_product_status.`, isError: true };
+        const costing = await productCosting(ctx, productId);
+        const outcome = await activateProduct(ctx, actor, productId);
+        if (outcome.approvalRequired) {
+          await ctx.db.patch(outcome.approvalId, { summary: `${s(input, "summary") ?? ""} | مكوّنات: ${costing.components.length}، هامش: ${costing.margin.marginPercent ?? "—"}%، استرشادية: ${costing.estimatedComponents}`.slice(0, 2000) });
+          return { content: `أُنشئ طلب اعتماد تفعيل المنتج ${product.businessId} (${outcome.approvalId})؛ لن يُباع قبل موافقة المالك.`, approvalId: outcome.approvalId };
+        }
+        return { content: `فُعّل المنتج ${product.businessId}.` };
+      }
+      case "create_campaign": {
+        const budget = n(input, "budgetOmr");
+        const result = await createCampaign(ctx, actor, {
+          name: s(input, "name") ?? "",
+          objective: s(input, "objective") ?? "",
+          platforms: list(input, "platforms") as Doc<"campaigns">["platforms"],
+          startDate: ts(input, "startDate"),
+          endDate: ts(input, "endDate"),
+          targetAudience: s(input, "targetAudience"),
+          budget: budget !== undefined ? { amount: budget, currency: "OMR" } : undefined,
+          productIds: list(input, "productIds").map((x) => ctx.db.normalizeId("products", x)).filter((x): x is Id<"products"> => !!x),
+        });
+        return { content: `أُنشئت الحملة ${result.businessId} (معرّف ${result.id}) بحالة DRAFT؛ أضف منشوراتها عبر schedule_content.` };
+      }
+      case "propose_follow_up": {
+        const leadId = id(ctx, "leads", s(input, "leadId"));
+        if (!leadId) return { content: "leadId غير صالح", isError: true };
+        const channel = s(input, "channel");
+        if (!V.isOneOf(V.CHANNELS, channel)) return { content: "channel غير معياري", isError: true };
+        const result = await proposeFollowUp(ctx, actor, agent.slug, { leadId, channel, message: s(input, "message") ?? "", purpose: s(input, "purpose") ?? "متابعة", followUpAt: ts(input, "followUpAt") });
+        return { content: result.autoApproved ? "اعتُمدت رسالة المتابعة تلقائياً وفق قاعدة المالك." : "أُنشئ طلب اعتماد لرسالة المتابعة؛ لن تُرسل قبل موافقة المالك.", approvalId: result.approvalId };
+      }
+      case "pipeline_report":
+        return { content: json(await pipelineReport(ctx, { staleDays: n(input, "staleDays") })) };
       case "create_lead": {
         const result = await createRecord(ctx, actor, "leads", {
           contactName: s(input, "contactName"),
@@ -495,36 +603,17 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
         if (!V.isOneOf(V.CONTENT_PLATFORMS, platform)) return { content: "platform غير معياري", isError: true };
         const scheduledAt = ts(input, "scheduledAt");
         if (!scheduledAt) return { content: "scheduledAt غير صالح", isError: true };
-        const businessId = await nextBusinessId(ctx, "contentCalendar");
-        const base = await stampBase(ctx, actor, businessId, { classification: "INTERNAL", dataOwnerAgent: "sales" });
-        const contentId = await ctx.db.insert("contentCalendar", {
-          ...base,
-          campaignId: id(ctx, "campaigns", s(input, "campaignId")),
-          productId: id(ctx, "products", s(input, "productId")),
+        const result = await scheduleContent(ctx, actor, agent.slug, {
           platform,
-          scheduledAt: { timestamp: scheduledAt, timezone: "Asia/Muscat" },
-          status: "PENDING_APPROVAL",
           caption: s(input, "caption") ?? "",
           captionEn: s(input, "captionEn"),
           hashtags: list(input, "hashtags"),
           visualIdea: s(input, "visualIdea"),
-          assetIds: [],
+          scheduledAt,
+          productId: id(ctx, "products", s(input, "productId")),
+          campaignId: id(ctx, "campaigns", s(input, "campaignId")),
         });
-        const { approvalId } = await createApproval(ctx, actor, {
-          kind: "PUBLISH_CONTENT",
-          agentSlug: agent.slug,
-          taskId: task._id,
-          title: `نشر على ${platform}: ${(s(input, "caption") ?? "").slice(0, 50)}`,
-          summary: `منشور مقترح على ${platform} في ${new Date(scheduledAt).toISOString()}`,
-          payload: { contentId, platform, caption: s(input, "caption"), hashtags: list(input, "hashtags"), visualIdea: s(input, "visualIdea"), scheduledAt },
-          toolName: "schedule_content",
-          targetTable: "contentCalendar",
-          targetRecordId: contentId,
-          severity: "D3",
-        });
-        await ctx.db.patch(contentId, { approvalId });
-        await appendAudit(ctx, { actor, table: "contentCalendar", recordId: contentId, businessId, event: "CREATE", newValue: { platform, scheduledAt, status: "PENDING_APPROVAL" }, severity: "D2", approvalId });
-        return { content: `أُضيف المنشور ${businessId} إلى تقويم النشر بانتظار اعتماد المالك.`, approvalId };
+        return { content: `أُضيف المنشور ${result.businessId} إلى تقويم النشر بانتظار اعتماد المالك.`, approvalId: result.approvalId };
       }
       case "propose_reply": {
         const interactionId = id(ctx, "interactions", s(input, "interactionId"));
@@ -612,50 +701,6 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
   } catch (e) {
     return { content: `خطأ في الأداة ${toolName}: ${errorMessage(e)}`, isError: true };
   }
-}
-
-/** KPIs are computed from the database, never estimated (section 3.1). */
-export async function computeKpis(ctx: QueryCtx | MutationCtx, month?: string) {
-  const now = new Date();
-  const key = month ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const [y, m] = key.split("-").map(Number);
-  const start = Date.UTC(y, m - 1, 1);
-  const end = Date.UTC(y, m, 1);
-  const inRange = (t: number) => t >= start && t < end;
-  const interactions = await ctx.db.query("interactions").withIndex("by_receivedAt", (q) => q.gte("receivedAt", start).lt("receivedAt", end)).take(5000);
-  const leads = (await ctx.db.query("leads").take(5000)).filter((l) => !l.archivedAt);
-  const leadsThisMonth = leads.filter((l) => inRange(l.createdAt));
-  const byStage: Record<string, number> = {};
-  for (const l of leads) byStage[l.stage] = (byStage[l.stage] ?? 0) + 1;
-  const bookings = (await ctx.db.query("bookings").take(5000)).filter((b) => !b.archivedAt && inRange(b.createdAt));
-  const revenueOmr = bookings.filter((b) => ["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(b.status)).reduce((s, b) => s + b.totalSellingPrice.baseAmount, 0);
-  const quotes = (await ctx.db.query("quotes").take(5000)).filter((q) => !q.archivedAt && inRange(q.createdAt));
-  const usage = await monthlyUsage(ctx, key);
-  const inbound = interactions.filter((i) => i.direction === "INBOUND").length;
-  const qualified = leadsThisMonth.filter((l) => l.stage !== "NEW_LEAD").length;
-  const won = leadsThisMonth.filter((l) => l.stage === "WON").length;
-  const paidBookings = bookings.filter((b) => b.paymentStatus === "PAID" || b.paymentStatus === "DEPOSIT_PAID" || b.paymentStatus === "PARTIALLY_PAID").length;
-  const pct = (a: number, b: number) => (b === 0 ? null : Math.round((a / b) * 1000) / 10);
-  return {
-    monthKey: key,
-    inquiries: inbound,
-    newLeads: leadsThisMonth.length,
-    leadsByStage: byStage,
-    quotesSent: quotes.filter((q) => ["SENT", "ACCEPTED"].includes(q.status)).length,
-    bookings: bookings.length,
-    bookingsByStatus: bookings.reduce<Record<string, number>>((acc, b) => ((acc[b.status] = (acc[b.status] ?? 0) + 1), acc), {}),
-    revenueOmr: Math.round(revenueOmr * 1000) / 1000,
-    agentCostUsd: usage.totalUsd,
-    budgetUsd: usage.budgetUsd,
-    conversion: {
-      inquiryToLeadPercent: pct(leadsThisMonth.length, inbound),
-      leadToQuotePercent: pct(quotes.length, leadsThisMonth.length),
-      quoteToBookingPercent: pct(bookings.length, quotes.length),
-      paidBookingsOverQualifiedLeadsPercent: pct(paidBookings, qualified),
-      wonLeadsPercent: pct(won, leadsThisMonth.length),
-    },
-    source: { kind: "db", retrievedAt: Date.now() },
-  };
 }
 
 export function assertToolKnown(name: string) {

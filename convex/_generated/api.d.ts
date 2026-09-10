@@ -63,6 +63,8 @@ import type * as services_documents from "../services/documents.js";
 import type * as services_governance from "../services/governance.js";
 import type * as services_knowledge from "../services/knowledge.js";
 import type * as services_records from "../services/records.js";
+import type * as services_reports from "../services/reports.js";
+import type * as services_sales from "../services/sales.js";
 import type * as services_tasks from "../services/tasks.js";
 import type * as services_usage from "../services/usage.js";
 import type * as settings from "../settings.js";
@@ -131,6 +133,8 @@ declare const fullApi: ApiFromModules<{
   "services/governance": typeof services_governance;
   "services/knowledge": typeof services_knowledge;
   "services/records": typeof services_records;
+  "services/reports": typeof services_reports;
+  "services/sales": typeof services_sales;
   "services/tasks": typeof services_tasks;
   "services/usage": typeof services_usage;
   settings: typeof settings;

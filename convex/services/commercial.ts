@@ -514,5 +514,69 @@ export async function createQuoteDraft(ctx: MutationCtx, actor: Actor, input: { 
     citations: [{ kind: "record", table: "products", recordId: input.productId, retrievedAt: now }],
   });
   await appendAudit(ctx, { actor, table: "quotes", recordId: id, businessId, event: "CREATE", newValue: { leadId: input.leadId, productId: input.productId, productVersion: product.version, warnings }, severity: "D2" });
+  // Preparing a proposal advances the lead when the pipeline allows it.
+  if (V.LEAD_TRANSITIONS[lead.stage].includes("PROPOSAL_PREPARED")) {
+    await ctx.db.patch(lead._id, { stage: "PROPOSAL_PREPARED", updatedAt: now, updatedBy: actor });
+    await appendAudit(ctx, { actor, table: "leads", recordId: lead._id, businessId: lead.businessId, event: "UPDATE", oldValue: { stage: lead.stage }, newValue: { stage: "PROPOSAL_PREPARED", quoteId: id }, severity: "D2" });
+  }
   return { id, businessId, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Itinerary (day plan) — editable while the product is not ACTIVE
+// ---------------------------------------------------------------------------
+export interface ItineraryDayInput {
+  dayNumber: number;
+  title: string;
+  description: string;
+  destinationId?: Id<"destinations">;
+  attractionIds?: Id<"attractions">[];
+  meals?: { breakfast: boolean; lunch: boolean; dinner: boolean };
+  overnightHotelId?: Id<"hotels">;
+  overnightDestinationId?: Id<"destinations">;
+}
+
+export async function upsertItineraryDay(ctx: MutationCtx, actor: Actor, productId: Id<"products">, input: ItineraryDayInput): Promise<Id<"itineraries">> {
+  const product = await ctx.db.get(productId);
+  if (!product) throw appError("NOT_FOUND", "المنتج غير موجود");
+  if (product.status === "ACTIVE" || product.status === "ARCHIVED") throw appError("INVALID_TRANSITION", "لا يُعدَّل برنامج منتج فعّال؛ أنشئ إصداراً جديداً");
+  await assertAccess(ctx, actor, "itineraries", "CREATE", { record: { productId } });
+  if (!Number.isInteger(input.dayNumber) || input.dayNumber < 1 || input.dayNumber > Math.max(product.durationDays, 1)) {
+    throw appError("VALIDATION", `dayNumber: يجب أن يكون بين 1 و${product.durationDays}`, { field: "dayNumber" });
+  }
+  if (!input.title?.trim()) throw appError("VALIDATION", "title: إلزامي", { field: "title" });
+  if (input.destinationId) await requireRef(ctx, "destinations", input.destinationId, "destinationId");
+  if (input.overnightHotelId) await requireRef(ctx, "hotels", input.overnightHotelId, "overnightHotelId");
+  for (const a of input.attractionIds ?? []) await requireRef(ctx, "attractions", a, "attractionIds");
+  const existing = (await ctx.db.query("itineraries").withIndex("by_product", (q) => q.eq("productId", productId)).take(60)).find((d) => d.dayNumber === input.dayNumber);
+  const now = Date.now();
+  const fields = {
+    title: input.title.trim(),
+    description: input.description?.trim() ?? "",
+    destinationId: input.destinationId,
+    attractionIds: input.attractionIds ?? [],
+    meals: input.meals ?? { breakfast: false, lunch: false, dinner: false },
+    overnightHotelId: input.overnightHotelId,
+    overnightDestinationId: input.overnightDestinationId,
+  };
+  if (existing) {
+    await ctx.db.patch(existing._id, { ...fields, updatedAt: now, updatedBy: actor });
+    await appendAudit(ctx, { actor, table: "itineraries", recordId: existing._id, businessId: existing.businessId, event: "UPDATE", newValue: fields, severity: "D2" });
+    return existing._id;
+  }
+  const businessId = await nextBusinessId(ctx, "itineraries");
+  const id = await ctx.db.insert("itineraries", { businessId, productId, dayNumber: input.dayNumber, ...fields, createdBy: actor, updatedBy: actor, createdAt: now, updatedAt: now });
+  await appendAudit(ctx, { actor, table: "itineraries", recordId: id, businessId, event: "CREATE", newValue: { productId, dayNumber: input.dayNumber, ...fields }, severity: "D2" });
+  return id;
+}
+
+export async function archiveProductComponent(ctx: MutationCtx, actor: Actor, componentId: Id<"productComponents">) {
+  const component = await ctx.db.get(componentId);
+  if (!component) throw appError("NOT_FOUND", "المكوّن غير موجود");
+  const product = await ctx.db.get(component.productId);
+  if (product?.status === "ACTIVE") throw appError("INVALID_TRANSITION", "لا تُعدَّل مكوّنات منتج فعّال؛ أنشئ إصداراً جديداً");
+  await assertAccess(ctx, actor, "productComponents", "ARCHIVE", { record: component });
+  const now = Date.now();
+  await ctx.db.patch(componentId, { archivedAt: now, updatedAt: now, updatedBy: actor });
+  await appendAudit(ctx, { actor, table: "productComponents", recordId: componentId, businessId: component.businessId, event: "ARCHIVE", severity: "D2" });
 }

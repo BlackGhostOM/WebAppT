@@ -79,6 +79,11 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
 - Instagram/WhatsApp: mock mode until Phase 3 integrations are connected (Settings → Integrations).
 
 ## Phase status
-Phase 1 (backbone) implemented. Phase 2: product agent web research + package management, sales pipeline/content flows.
-Phase 3: support agent inbox, website form, Instagram webhook (mock first). Phase 4: reports, scheduled follow-ups,
-auto-approval rules, Vercel/Convex deployment guide (docs/DEPLOY.md).
+- Phase 1 (backbone): done.
+- Phase 2 (product + sales agents): done — web research via Anthropic `web_search` (sources become task citations,
+  searches billed in usageLog), product drafting tools (draft → components → itinerary → lifecycle → activation
+  approval), sales tools (quotes from ACTIVE products only, follow-up proposals, campaigns, content calendar,
+  pipeline report). Owner UI: packages (research-rate confirmation, components, itinerary), pipeline (lead dialog,
+  quotes, messages), content calendar (campaigns, week grid, owner actions). Services: `services/sales.ts`, `services/reports.ts`.
+- Phase 3: support agent inbox, website form, Instagram webhook (mock first).
+- Phase 4: reports, scheduled follow-ups, auto-approval rules, Vercel/Convex deployment guide (docs/DEPLOY.md).

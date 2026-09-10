@@ -186,7 +186,23 @@ export async function ensureDefaultsInternal(ctx: MutationCtx): Promise<{ agents
   for (const slug of Object.keys(AGENT_SEEDS) as AgentSlug[]) {
     const seed = AGENT_SEEDS[slug];
     const existing = await ctx.db.query("agents").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
-    if (existing) continue;
+    if (existing) {
+      // Agents never edited by the owner pick up new tools/prompts released with the code.
+      if (existing.updatedBy.type === "system") {
+        const missing = seed.allowedTools.filter((t) => !existing.allowedTools.includes(t));
+        if (missing.length > 0 || existing.systemPrompt !== seed.systemPrompt || existing.maxStepsPerTask !== seed.maxStepsPerTask) {
+          await ctx.db.patch(existing._id, {
+            allowedTools: [...existing.allowedTools, ...missing],
+            systemPrompt: seed.systemPrompt,
+            promptVersion: existing.systemPrompt === seed.systemPrompt ? existing.promptVersion : existing.promptVersion + 1,
+            maxStepsPerTask: seed.maxStepsPerTask,
+            updatedAt: now,
+            updatedBy: SYSTEM,
+          });
+        }
+      }
+      continue;
+    }
     await ctx.db.insert("agents", {
       slug,
       name: seed.name,

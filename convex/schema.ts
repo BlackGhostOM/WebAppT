@@ -7,7 +7,7 @@
  * future data model. Every enumerated field is constrained to the controlled
  * vocabulary in `./lib/vocab.ts`.
  *
- * Schema version: 1.0 (see docs/DATA_CHANGE_PROCESS.md).
+ * Schema version: 1.1 (see docs/DATA_CHANGE_PROCESS.md).
  */
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
@@ -859,6 +859,8 @@ export default defineSchema({
     outputTokens: v.number(),
     cacheReadTokens: v.number(),
     cacheWriteTokens: v.number(),
+    /** Server-side web searches in this call (schema 1.1). */
+    webSearchRequests: v.optional(v.number()),
     costUsd: v.number(),
     batch: v.boolean(),
     escalated: v.boolean(),

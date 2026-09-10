@@ -45,6 +45,8 @@ export interface LlmUsage {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  /** Server-side web searches performed during the call (billed per request). */
+  webSearchRequests?: number;
 }
 
 export interface LlmResponse {

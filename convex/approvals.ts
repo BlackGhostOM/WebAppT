@@ -10,11 +10,11 @@ import { resumeAfterDecision } from "./agents/runtime";
 import { ownerActor, requireOwner, requireUser, systemActor, type Actor } from "./lib/actor";
 import { appendAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
-import { nextBusinessId } from "./lib/ids";
 import { getSetting } from "./lib/settings";
 import { decideApproval, listPending, markExecuted } from "./services/approvals";
 import { confirmBookingService, type EvidenceInput } from "./services/commercial";
 import { updateRecord } from "./services/records";
+import { deliverApprovedMessage, markQuoteSent } from "./services/sales";
 
 export const pending = query({
   args: {},
@@ -118,63 +118,12 @@ export const applyExecution = internalMutation({
 
     switch (approval.kind) {
       case "SEND_CUSTOMER_MESSAGE": {
-        const customerId = payload.customerId as Id<"customers"> | undefined;
-        const channel = (payload.channel as Doc<"interactions">["channel"]) ?? "OTHER";
-        const message = String(payload.message ?? "");
-        const businessId = await nextBusinessId(ctx, "interactions");
-        const interactionId = await ctx.db.insert("interactions", {
-          businessId,
-          customerId,
-          channel,
-          direction: "OUTBOUND",
-          kind: (payload.classification as Doc<"interactions">["kind"]) ?? "FOLLOW_UP",
-          status: "REPLIED",
-          body: message,
-          classification: "CUSTOMER_CONFIDENTIAL",
-          approvalId,
-          taskId: approval.taskId,
-          receivedAt: now,
-          sentAt: now,
-          createdBy: owner,
-          createdAt: now,
-          updatedAt: now,
-        });
-        if (payload.interactionId) {
-          const original = await ctx.db.get(payload.interactionId as Id<"interactions">);
-          if (original) await ctx.db.patch(original._id, { status: "REPLIED", sentAt: now, updatedAt: now });
-        }
-        result = { delivery: mode === "live" ? "queued_for_channel" : "mock_logged", interactionId, channel };
+        result = await deliverApprovedMessage(ctx, owner, approval, payload, mode);
         break;
       }
       case "SEND_QUOTE": {
         const quoteId = payload.quoteId as Id<"quotes">;
-        const quote = await ctx.db.get(quoteId);
-        if (!quote) throw appError("NOT_FOUND", "العرض غير موجود");
-        await ctx.db.patch(quoteId, { status: "SENT", sentAt: now, updatedAt: now, updatedBy: owner });
-        const lead = await ctx.db.get(quote.leadId);
-        if (lead && ["PROPOSAL_PREPARED", "REQUIREMENTS_COLLECTED", "QUALIFIED"].includes(lead.stage)) {
-          await ctx.db.patch(lead._id, { stage: "QUOTE_SENT", lastContactAt: now, updatedAt: now, updatedBy: owner });
-        }
-        const businessId = await nextBusinessId(ctx, "interactions");
-        await ctx.db.insert("interactions", {
-          businessId,
-          customerId: quote.customerId,
-          leadId: quote.leadId,
-          channel: (payload.channel as Doc<"interactions">["channel"]) ?? "EMAIL",
-          direction: "OUTBOUND",
-          kind: "FOLLOW_UP",
-          status: "REPLIED",
-          subject: `عرض سعر ${quote.businessId}`,
-          body: String(payload.message ?? ""),
-          classification: "CUSTOMER_CONFIDENTIAL",
-          approvalId,
-          taskId: approval.taskId,
-          receivedAt: now,
-          sentAt: now,
-          createdBy: owner,
-          createdAt: now,
-          updatedAt: now,
-        });
+        const { quote } = await markQuoteSent(ctx, owner, quoteId, (payload.channel as Doc<"interactions">["channel"]) ?? "EMAIL", String(payload.message ?? ""), approvalId);
         result = { delivery: mode === "live" ? "queued_for_channel" : "mock_logged", quote: quote.businessId };
         break;
       }

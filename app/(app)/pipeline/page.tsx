@@ -1,58 +1,74 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
-import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { LEAD_STAGES } from "@/convex/lib/vocab";
+import { AskAgentButton } from "@/components/ask-agent-button";
 import { StatusBadge } from "@/components/badges";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { LeadDialog } from "@/components/pipeline/lead-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LEAD_STAGES, LEAD_TRANSITIONS, LOST_REASONS } from "@/convex/lib/vocab";
-import { formatDate, formatMoney } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { labelOf, useT } from "@/lib/i18n";
-
-type Lead = NonNullable<ReturnType<typeof useQuery<typeof api.leads.pipeline>>>["leads"][number];
 
 export default function PipelinePage() {
   const { t, locale } = useT();
   const data = useQuery(api.leads.pipeline);
-  const changeStage = useMutation(api.leads.changeStage);
-  const [selected, setSelected] = useState<Lead | null>(null);
-  const [stage, setStage] = useState<string>("");
-  const [lostReason, setLostReason] = useState<string>("");
-  const [note, setNote] = useState("");
-
-  async function submit() {
-    if (!selected || !stage) return;
-    try {
-      await changeStage({ leadId: selected._id as Id<"leads">, stage, lostReason: lostReason || undefined, note: note || undefined });
-      toast.success(labelOf(stage, locale));
-      setSelected(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t.common.error);
-    }
-  }
+  const report = useQuery(api.leads.report, {});
+  const [selected, setSelected] = useState<Id<"leads"> | null>(null);
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={t.nav.pipeline}
-        description="العملاء المحتملون حسب المرحلة، والعروض التجارية المبنية على منتجات فعّالة فقط."
+        description="العملاء المحتملون حسب المرحلة، والعروض التجارية المبنية على منتجات فعّالة فقط، وتقرير التحويل من قاعدة البيانات."
         actions={
-          <Button variant="outline" size="sm" render={<Link href="/data/leads" />}>
-            {t.data.newRecord}
-          </Button>
+          <>
+            <AskAgentButton label="اطلب من وكيل المبيعات" template="راجع خط المبيعات: حدّد العملاء الراكدين والمتابعات المتأخرة، واقترح رسالة متابعة لكل منهم بلغته، وأعدّ عروضاً للمؤهلين من المنتجات الفعّالة، وقدّم تقرير التحويل لهذا الشهر." />
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/data/leads?new=1" />}>
+              {t.data.newRecord}
+            </Button>
+          </>
         }
       />
+
+      {report && (
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground">القيمة المتوقعة المفتوحة (ر.ع)</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold tabular-nums">{formatNumber(report.totalOpenExpectedValueOmr, 0)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground">عملاء بلا تواصل منذ 7 أيام</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold tabular-nums">{report.staleLeads.length}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground">متابعات متأخرة</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold tabular-nums">{report.overdueFollowUps.length}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground">التحويل: عرض ← حجز</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold tabular-nums">{formatPercent(report.conversion.quoteToBookingPercent)}</CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {LEAD_STAGES.map((s) => {
           const column = (data?.leads ?? []).filter((l) => l.stage === s);
+          const stale = new Set(report?.staleLeads.map((l) => l._id) ?? []);
           return (
             <div key={s} className="rounded-lg border bg-muted/30 p-2">
               <div className="mb-2 flex items-center justify-between px-1">
@@ -61,22 +77,15 @@ export default function PipelinePage() {
               </div>
               <div className="space-y-2">
                 {column.map((lead) => (
-                  <button
-                    key={lead._id}
-                    type="button"
-                    onClick={() => {
-                      setSelected(lead);
-                      setStage("");
-                      setLostReason("");
-                      setNote("");
-                    }}
-                    className="block w-full rounded-md border bg-background p-2 text-start text-sm hover:bg-muted"
-                  >
-                    <div className="font-medium">{lead.contactName}</div>
+                  <button key={lead._id} type="button" onClick={() => setSelected(lead._id)} className="block w-full rounded-md border bg-background p-2 text-start text-sm hover:bg-muted">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-medium">{lead.contactName}</span>
+                      {stale.has(lead._id) && <span className="text-[10px] text-destructive">راكد</span>}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {labelOf(lead.channel, locale)} · {formatMoney(lead.expectedValue, locale)}
                     </div>
-                    {lead.nextFollowUpAt && <div className="text-[10px] text-muted-foreground">متابعة: {formatDate(lead.nextFollowUpAt, locale)}</div>}
+                    {lead.nextFollowUpAt && <div className={`text-[10px] ${lead.nextFollowUpAt < Date.now() ? "text-destructive" : "text-muted-foreground"}`}>متابعة: {formatDate(lead.nextFollowUpAt, locale)}</div>}
                     {lead.lostReason && <div className="text-[10px] text-destructive">{lead.lostReason}</div>}
                   </button>
                 ))}
@@ -91,83 +100,35 @@ export default function PipelinePage() {
         {data?.quotes.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {data?.quotes.map((q) => (
-            <div key={q._id} className="rounded-md border p-2 text-sm">
+            <button key={q._id} type="button" onClick={() => setSelected(q.leadId)} className="rounded-md border p-2 text-start text-sm hover:bg-muted">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{q.businessId}</span>
                 <StatusBadge value={q.status} />
               </div>
               <div className="text-xs text-muted-foreground">
-                {t.common.version} {q.version} · منتج {q.productVersion ?? "—"} · حتى {formatDate(q.validUntil, locale)}
+                V{q.version} · منتج {q.productVersion ?? "—"} · حتى {formatDate(q.validUntil, locale)}
               </div>
               <div className="mt-1 tabular-nums">{formatMoney(q.totals.customerSellingPrice, locale)}</div>
-              {q.priceWarnings.length > 0 && (
-                <ul className="mt-1 text-xs text-yellow-800">
-                  {q.priceWarnings.map((w) => (
-                    <li key={w}>⚠️ {w}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+              {q.priceWarnings.length > 0 && <div className="mt-1 text-xs text-yellow-800">⚠️ {q.priceWarnings.length} تحذير سعر</div>}
+            </button>
           ))}
         </div>
       </section>
 
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selected?.contactName}</DialogTitle>
-          </DialogHeader>
-          {selected && (
-            <div className="space-y-3 text-sm">
-              <div className="text-muted-foreground">{selected.summary}</div>
-              <div className="space-y-1.5">
-                <Label>المرحلة الجديدة</Label>
-                <Select value={stage || null} onValueChange={(v) => setStage(String(v ?? ""))} items={LEAD_TRANSITIONS[selected.stage as keyof typeof LEAD_TRANSITIONS].map((s) => ({ value: s, label: labelOf(s, locale) }))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={labelOf(selected.stage, locale)} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LEAD_TRANSITIONS[selected.stage as keyof typeof LEAD_TRANSITIONS].map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {labelOf(s, locale)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {stage === "LOST" && (
-                <div className="space-y-1.5">
-                  <Label>سبب الخسارة</Label>
-                  <Select value={lostReason || null} onValueChange={(v) => setLostReason(String(v ?? ""))} items={LOST_REASONS.map((r) => ({ value: r, label: r }))}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LOST_REASONS.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label>ملاحظة</Label>
-                <Input value={note} onChange={(e) => setNote(e.target.value)} />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelected(null)}>
-              {t.common.cancel}
-            </Button>
-            <Button onClick={submit} disabled={!stage || (stage === "LOST" && !lostReason)}>
-              {t.common.save}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {report && Object.keys(report.lostReasons).length > 0 && (
+        <section className="text-sm">
+          <h2 className="mb-1 text-base font-medium">أسباب الخسارة</h2>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(report.lostReasons).map(([reason, count]) => (
+              <span key={reason} className="rounded-md border px-2 py-1 text-xs">
+                {reason}: {count}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <LeadDialog leadId={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

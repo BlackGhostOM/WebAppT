@@ -55,7 +55,7 @@ const D3_FIELDS: Record<string, string[]> = {
   rates: ["amount", "rateTrust:CONTRACTED", "validTo", "cancellationTerms"],
   contracts: ["*"],
   pricingRules: ["value", "kind", "status"],
-  products: ["status:ACTIVE", "status:READY_FOR_SALE"],
+  products: ["status:ACTIVE"],
   policies: ["lifecycle:ACTIVE", "body"],
   decisionRegister: ["*"],
   agents: ["systemPrompt", "allowedTools", "defaultModel", "monthlyBudgetUsd"],

@@ -57,21 +57,31 @@ function mapStopReason(reason: string | null): LlmStopReason {
   }
 }
 
-function fromAnthropicContent(content: Anthropic.ContentBlock[]): LlmContentBlock[] {
+/**
+ * Maps Anthropic content blocks to the provider-agnostic transcript. Server-side
+ * web searches are kept as text notes (query) and `web_search_result` blocks
+ * (url/title/time) so every price can be traced to its source (section 3.2).
+ */
+export function fromAnthropicContent(content: Anthropic.ContentBlock[], now: number = Date.now()): LlmContentBlock[] {
   const out: LlmContentBlock[] = [];
-  const now = Date.now();
   for (const block of content) {
     if (block.type === "text") out.push({ type: "text", text: block.text });
     else if (block.type === "tool_use") out.push({ type: "tool_use", id: block.id, name: block.name, input: (block.input ?? {}) as Record<string, unknown> });
-    else if (block.type === "web_search_tool_result") {
+    else if (block.type === "server_tool_use") {
+      const query = typeof (block.input as { query?: unknown })?.query === "string" ? (block.input as { query: string }).query : JSON.stringify(block.input ?? {});
+      out.push({ type: "text", text: `[بحث ويب] ${query}` });
+    } else if (block.type === "web_search_tool_result") {
       const results = Array.isArray(block.content) ? block.content : [];
       for (const r of results) {
         if (r.type === "web_search_result") {
-          out.push({ type: "web_search_result", url: r.url, title: r.title, snippet: r.encrypted_content ? "" : "", retrievedAt: now });
+          out.push({ type: "web_search_result", url: r.url, title: r.title, snippet: r.page_age ? `page_age=${r.page_age}` : "", retrievedAt: now });
         }
       }
+      if (!Array.isArray(block.content) && block.content && "error_code" in block.content) {
+        out.push({ type: "text", text: `[بحث ويب] خطأ: ${String((block.content as { error_code: string }).error_code)}` });
+      }
     }
-    // thinking / server_tool_use blocks are not surfaced to the loop.
+    // thinking blocks are not surfaced to the loop.
   }
   return out;
 }
@@ -112,6 +122,7 @@ export async function createAnthropicProvider(apiKey?: string): Promise<LLMProvi
           outputTokens: response.usage.output_tokens,
           cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
           cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
+          webSearchRequests: response.usage.server_tool_use?.web_search_requests ?? 0,
         },
         model: response.model,
         provider: "anthropic",

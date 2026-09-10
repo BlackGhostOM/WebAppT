@@ -167,6 +167,10 @@ export const run = internalAction({
       }
 
       transcript = compactTranscript([...transcript, { role: "assistant", content: response.content }]);
+      const webSources = response.content.filter((b) => b.type === "web_search_result") as Extract<LlmContentBlock, { type: "web_search_result" }>[];
+      if (webSources.length > 0) {
+        await ctx.runMutation(internal.agents.runtime.addWebCitations, { taskId, sources: webSources.map((s) => ({ url: s.url, title: s.title, retrievedAt: s.retrievedAt })) });
+      }
       const text = textOf(response.content);
       if (text) partial = partial ? `${partial}\n\n${text}` : text;
       const toolUses = response.content.filter((b) => b.type === "tool_use") as Extract<LlmContentBlock, { type: "tool_use" }>[];

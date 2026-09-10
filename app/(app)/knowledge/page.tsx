@@ -334,7 +334,7 @@ export default function KnowledgePage() {
                   </Button>
                 )}
                 {detail?.fileUrl && (
-                  <Button size="xs" variant="ghost" render={<a href={detail.fileUrl} target="_blank" rel="noreferrer" />}>
+                  <Button size="xs" variant="ghost" nativeButton={false} render={<a href={detail.fileUrl} target="_blank" rel="noreferrer" />}>
                     الملف الأصلي
                   </Button>
                 )}
