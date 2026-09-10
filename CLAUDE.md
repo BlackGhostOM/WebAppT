@@ -80,8 +80,10 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
 - Convex cloud deployment `quiet-hyena-590` (URL https://quiet-hyena-590.convex.cloud, HTTP https://quiet-hyena-590.convex.site);
   `.env.local` carries `CONVEX_DEPLOY_KEY` so every `npx convex …` command targets it. Env vars set there: ANTHROPIC_API_KEY,
   LLM_PROVIDER=anthropic, DEPLOYMENT_STAGE=prod, JWT_PRIVATE_KEY/JWKS/SITE_URL, OWNER_EMAIL. Owner account seeded.
-- Vercel: build via `node scripts/vercel-build.mjs` (deploys Convex too when CONVEX_DEPLOY_KEY is set in Vercel, otherwise
-  frontend-only against the defaults in next.config.ts). GitHub remote: https://github.com/BlackGhostOM/WebAppT.git.
+- Vercel project `webappt` (team Black) → https://webappt.vercel.app, auto-deploys from `main` of
+  https://github.com/BlackGhostOM/WebAppT.git. Build via `node scripts/vercel-build.mjs` (deploys Convex too when
+  CONVEX_DEPLOY_KEY is set in Vercel, otherwise frontend-only against the defaults in next.config.ts — the current setup).
+  Convex `SITE_URL` = https://webappt.vercel.app.
 - To develop against a local anonymous backend again, swap the commented lines in `.env.local` and run
   `CONVEX_AGENT_MODE=anonymous npx convex dev`.
 
