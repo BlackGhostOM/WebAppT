@@ -6,11 +6,13 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { ownerActor, requireOwner, requireUser } from "./lib/actor";
 import { appendAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
-import { runFollowUps } from "./services/followUps";
+import { runScheduledJob } from "./services/scheduled";
+// appendAudit is still used by `skip` below.
 
+/** Kept for compatibility; the cron now goes through `scheduled.run` which honours the owner's switch. */
 export const daily = internalMutation({
   args: {},
-  handler: async (ctx) => await runFollowUps(ctx),
+  handler: async (ctx) => await runScheduledJob(ctx, "lifecycleFollowUps"),
 });
 
 export const list = query({
@@ -33,9 +35,7 @@ export const runNow = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireOwner(ctx);
-    const result = await runFollowUps(ctx);
-    await appendAudit(ctx, { actor: ownerActor(user), table: "settings", recordId: "followUps", event: "SYSTEM", newValue: { manualRun: true, ...result }, severity: "D1" });
-    return result;
+    return (await runScheduledJob(ctx, "lifecycleFollowUps", { actor: ownerActor(user), force: true })) as { scheduled: number; proposed: number; skipped: number; cancelled: number };
   },
 });
 

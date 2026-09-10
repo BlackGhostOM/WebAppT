@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { ar, type Dictionary } from "./ar";
 import { en } from "./en";
 
@@ -18,17 +18,27 @@ interface LocaleContextValue {
 
 const LocaleContext = createContext<LocaleContextValue>({ locale: "ar", dir: "rtl", t: ar, setLocale: () => {} });
 
-export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("ar");
+// localStorage as an external store: the server snapshot is always Arabic, the
+// client re-renders with the stored choice after hydration (no setState in effects).
+const listeners = new Set<() => void>();
+function readStoredLocale(): Locale {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "ar";
+  } catch {
+    return "ar";
+  }
+}
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === "en" || stored === "ar") setLocaleState(stored);
-    } catch {
-      // storage unavailable
-    }
-  }, []);
+export function LocaleProvider({ children }: { children: ReactNode }) {
+  const locale = useSyncExternalStore(subscribe, readStoredLocale, () => "ar" as Locale);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -36,12 +46,12 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      // ignore
+      // storage unavailable: the choice lasts for this render tree only
     }
+    for (const l of listeners) l();
   }, []);
 
   const value = useMemo<LocaleContextValue>(() => ({ locale, dir: locale === "ar" ? "rtl" : "ltr", t: DICTS[locale], setLocale }), [locale, setLocale]);

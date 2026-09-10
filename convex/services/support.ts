@@ -127,15 +127,15 @@ export async function proposeReply(ctx: MutationCtx, task: Doc<"tasks">, agent: 
     executiveTaskId = await escalateToExecutive(ctx, task, interaction, `تصنيف: شكوى (ثقة ${confidence}). الرد المقترح بانتظار اعتماد المالك:\n${reply.slice(0, 400)}`);
   }
 
-  // FAQ auto-reply: only when the owner enabled it, the model vouched for the source, confidence is high,
-  // no price is stated, the kind is a plain inquiry, and the channel's reply window is open.
+  // FAQ auto-reply: the model vouched for the source, confidence is high, no price is stated, the kind is a
+  // plain inquiry and the channel's reply window is open. The rule engine then applies the owner's switch,
+  // the daily cap and quiet hours.
   let autoApproved = kindAutoApproved;
   if (!autoApproved) {
-    const auto = await getSetting(ctx, "autoApprove");
-    const eligible = auto.faqAutoReply && input.faq === true && kind === "INQUIRY" && confidence >= escalation.confidenceThreshold && !looksLikePriceStatement(reply);
+    const eligible = input.faq === true && kind === "INQUIRY" && confidence >= escalation.confidenceThreshold && !looksLikePriceStatement(reply);
     if (eligible) {
       const windowOk = interaction.channel === "INSTAGRAM" || interaction.channel === "WHATSAPP" ? await replyWindowOpen(ctx, customer._id, interaction.channel, now) : true;
-      if (windowOk) autoApproved = await autoApprove(ctx, approvalId, "faq_auto_reply: سؤال شائع بإجابة من معرفة معتمدة؛ قاعدة فعّلها المالك");
+      if (windowOk) autoApproved = (await autoApprove(ctx, approvalId, "faq_auto_reply: سؤال شائع بإجابة من معرفة معتمدة؛ قاعدة فعّلها المالك", { faqEligible: true })).approved;
     }
   }
 

@@ -261,6 +261,10 @@ export const completeTask = internalMutation({
     await setTaskStatus(ctx, taskId, "COMPLETED", { result, transcript, partialResult: undefined });
     await appendRunStep(ctx, taskId, { kind: "FINAL", output: { result: result.slice(0, 4000) } });
     await syncChatMessage(ctx, task, result, "DONE", false);
+    // Scheduled (cron-created) tasks have no chat; the owner learns about the result through a notification.
+    if (task.requestedBy.type === "system" && task.requestedBy.id.startsWith("cron:") && !task.parentTaskId) {
+      await ctx.db.insert("notifications", { kind: "SCHEDULED_TASK_DONE", title: `اكتمل: ${task.title}`, body: result.slice(0, 1200), severity: "INFO", relatedTable: "tasks", relatedRecordId: taskId, createdAt: Date.now() });
+    }
     await resumeParentIfReady(ctx, task);
   },
 });

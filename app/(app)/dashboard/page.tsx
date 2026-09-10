@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import { AgentBadge, StatusBadge } from "@/components/badges";
+import { BarChart, LineChart } from "@/components/charts";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,8 +31,8 @@ export default function DashboardPage() {
 
   if (!data) {
     return (
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-24" />
         ))}
       </div>
@@ -43,12 +44,43 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader title={t.nav.dashboard} description={`${kpis.monthKey} · ${data.emergencyStopActive ? t.chat.emergencyActive : ""}`} />
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-        <Stat label={t.dashboard.inquiries} value={formatNumber(kpis.inquiries)} />
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <Stat label={t.dashboard.inquiries} value={formatNumber(kpis.inquiries)} hint={data.support.openNow.NEW + data.support.openNow.REPLY_PROPOSED + data.support.openNow.ESCALATED > 0 ? `${t.reports.openNow}: ${data.support.openNow.NEW + data.support.openNow.REPLY_PROPOSED + data.support.openNow.ESCALATED}` : undefined} />
         <Stat label={t.dashboard.newLeads} value={formatNumber(kpis.newLeads)} hint={`${t.dashboard.conversion}: ${formatPercent(kpis.conversion.wonLeadsPercent)} ${labelOf("WON", locale)}`} />
         <Stat label={t.dashboard.bookings} value={formatNumber(kpis.bookings)} hint={`${formatPercent(kpis.conversion.quoteToBookingPercent)} من العروض`} />
         <Stat label={t.dashboard.revenue} value={formatNumber(kpis.revenueOmr, 3)} />
-        <Stat label={t.dashboard.agentCost} value={formatUsd(usage.totalUsd)} hint={`${formatPercent(usage.percentOfBudget)} من ${formatUsd(usage.budgetUsd)}`} />
+        <Stat label={t.dashboard.agentCost} value={formatUsd(usage.totalUsd)} hint={`${formatPercent(usage.percentOfBudget)} من ${formatUsd(usage.budgetUsd)} · ${t.reports.projected} ${formatUsd(data.cost.projectedUsd)}`} />
+        <Stat label={`${t.reports.responseTime} · ${t.reports.avg}`} value={data.support.avgResponseMinutes === null ? "—" : `${formatNumber(data.support.avgResponseMinutes, 0)} د`} hint={`${t.reports.escalationRate} ${formatPercent(data.support.escalationRatePercent)} · ${t.reports.days30}`} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base">{t.reports.trend} — {t.reports.months6}</CardTitle>
+            <Link href="/reports" className="text-xs text-primary underline-offset-4 hover:underline">
+              {t.nav.reports} ←
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <BarChart
+              height={150}
+              data={data.series.map((p) => ({ label: p.monthKey.slice(2).replace("-", "/"), values: { inquiries: p.inquiries, newLeads: p.newLeads, bookings: p.bookings } }))}
+              series={[
+                { key: "inquiries", name: t.reports.inquiries },
+                { key: "newLeads", name: t.reports.leads },
+                { key: "bookings", name: t.reports.bookings },
+              ]}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t.reports.revenueTrend}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LineChart height={150} points={data.series.map((p) => ({ label: p.monthKey.slice(2).replace("-", "/"), value: p.revenueOmr }))} formatValue={(n) => formatNumber(n, 0)} />
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -63,6 +95,7 @@ export default function DashboardPage() {
             <Row label={t.dashboard.knowledgeGaps} value={formatNumber(dataRisks.openKnowledgeGaps)} warn={dataRisks.openKnowledgeGaps > 0} />
             <Row label={t.dashboard.unsupportedFactRate} value={formatPercent(dataRisks.unsupportedFactRatePercent)} warn={(dataRisks.unsupportedFactRatePercent ?? 0) > 20} />
             <Row label={t.dashboard.humanOverrideRate} value={formatPercent(dataRisks.humanOverrideRatePercent)} warn={(dataRisks.humanOverrideRatePercent ?? 0) > 30} />
+            <Row label={t.reports.autoShare} value={formatPercent(data.support.autoSharePercent)} />
             <Link href="/settings?tab=dataHealth" className="block pt-2 text-xs text-primary underline-offset-4 hover:underline">
               {t.settings.dataHealth} ←
             </Link>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -22,35 +22,27 @@ export default function ApprovalsPage() {
   const params = useSearchParams();
   const [status, setStatus] = useState<string>("PENDING");
   const list = useQuery(api.approvals.list, { status: status === "ALL" ? undefined : status, limit: 100 });
-  const [selectedId, setSelectedId] = useState<Id<"approvals"> | null>((params.get("id") as Id<"approvals"> | null) ?? null);
+  const [chosenId, setSelectedId] = useState<Id<"approvals"> | null>((params.get("id") as Id<"approvals"> | null) ?? null);
+  // Fall back to the first row without an effect; the detail panel is keyed by id so its drafts reset on change.
+  const selectedId = chosenId ?? list?.[0]?._id ?? null;
   const detail = useQuery(api.approvals.get, selectedId ? { approvalId: selectedId } : "skip");
   const decide = useMutation(api.approvals.decide);
   const [reason, setReason] = useState("");
-  const [edited, setEdited] = useState("");
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    if (!selectedId && list && list.length > 0) setSelectedId(list[0]._id);
-  }, [list, selectedId]);
-
-  useEffect(() => {
-    if (detail?.approval) {
-      setEdited(JSON.stringify(detail.approval.payload, null, 2));
-      setReason("");
-      setEditing(false);
-    }
-  }, [detail?.approval?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [edited, setEdited] = useState<string | null>(null);
+  const editing = edited !== null;
 
   async function act(decision: "APPROVED" | "REJECTED" | "EDITED_APPROVED") {
     if (!selectedId) return;
     try {
       let editedPayload: unknown;
       if (decision === "EDITED_APPROVED") {
-        editedPayload = JSON.parse(edited);
+        editedPayload = JSON.parse(edited ?? "{}");
       }
       await decide({ approvalId: selectedId, decision, reason: reason || undefined, editedPayload });
       toast.success(labelOf(decision, locale));
       setSelectedId(null);
+      setReason("");
+      setEdited(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t.common.error);
     }
@@ -132,7 +124,7 @@ export default function ApprovalsPage() {
                     {editing && (
                       <div className="space-y-1.5">
                         <Label htmlFor="edited">{t.approvals.edited} (JSON)</Label>
-                        <Textarea id="edited" dir="ltr" className="font-mono text-xs" rows={8} value={edited} onChange={(e) => setEdited(e.target.value)} />
+                        <Textarea id="edited" dir="ltr" className="font-mono text-xs" rows={8} value={edited ?? ""} onChange={(e) => setEdited(e.target.value)} />
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
@@ -142,7 +134,7 @@ export default function ApprovalsPage() {
                           {t.common.editAndApprove}
                         </Button>
                       ) : (
-                        <Button variant="outline" onClick={() => setEditing(true)}>
+                        <Button variant="outline" onClick={() => setEdited(JSON.stringify(approval.payload, null, 2))}>
                           {t.common.edit}
                         </Button>
                       )}

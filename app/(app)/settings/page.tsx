@@ -1,12 +1,14 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { APPROVAL_KINDS } from "@/convex/lib/vocab";
+import { APPROVAL_KINDS, FOLLOW_UP_KINDS } from "@/convex/lib/vocab";
+import type { ar } from "@/lib/i18n/ar";
 import { AgentBadge, SeverityBadge, StatusBadge } from "@/components/badges";
 import { EmptyState, JsonView, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -35,16 +37,13 @@ function Field({ label, children, hint }: { label: string; children: React.React
 export default function SettingsPage() {
   const { t, locale } = useT();
   const params = useSearchParams();
-  const [tab, setTab] = useState(params.get("tab") ?? "agents");
+  // The URL wins until the user clicks a tab; no effect needed to sync them.
+  const [chosenTab, setTab] = useState<string | null>(null);
+  const tab = chosenTab ?? params.get("tab") ?? "agents";
   const settings = useQuery(api.settings.getAll);
   const me = useQuery(api.settings.me);
   const updateSetting = useMutation(api.settings.update);
   const isOwner = me?.role === "owner";
-
-  useEffect(() => {
-    const p = params.get("tab");
-    if (p) setTab(p);
-  }, [params]);
 
   async function save(key: string, value: Record<string, unknown>) {
     try {
@@ -60,7 +59,7 @@ export default function SettingsPage() {
       <PageHeader title={t.settings.title} description={!isOwner ? "بعض الإعدادات متاحة للمالك فقط." : undefined} />
       <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
         <TabsList className="flex-wrap">
-          {(["agents", "models", "budget", "autoApprove", "integrations", "company", "users", "dataHealth", "governance"] as const).map((k) => (
+          {(["agents", "models", "budget", "autoApprove", "scheduled", "integrations", "company", "users", "dataHealth", "governance"] as const).map((k) => (
             <TabsTrigger key={k} value={k}>
               {t.settings[k]}
             </TabsTrigger>
@@ -72,6 +71,7 @@ export default function SettingsPage() {
         <TabsContent value="models">{settings && <ModelsTab routing={asRecord(settings.modelRouting)} escalation={asRecord(settings.escalation)} runtime={asRecord(settings.agentRuntime)} onSave={save} hints={settings.providerHints} />}</TabsContent>
         <TabsContent value="budget">{settings && <BudgetTab budget={asRecord(settings.budget)} onSave={save} />}</TabsContent>
         <TabsContent value="autoApprove">{settings && <AutoApproveTab value={settings.autoApprove} onSave={save} />}</TabsContent>
+        <TabsContent value="scheduled">{settings && <ScheduledTab value={settings.scheduledTasks} onSave={save} isOwner={!!isOwner} />}</TabsContent>
         <TabsContent value="integrations">{settings && <IntegrationsTab value={asRecord(settings.integrations)} hints={settings.providerHints} onSave={save} />}</TabsContent>
         <TabsContent value="company">{settings && <CompanyTab value={asRecord(settings.company)} onSave={save} />}</TabsContent>
         <TabsContent value="users">
@@ -89,95 +89,87 @@ export default function SettingsPage() {
 }
 
 // ---------------------------------------------------------------------------
+type AgentRow = NonNullable<ReturnType<typeof useQuery<typeof api.agentConfig.list>>>[number];
+type ToolRow = NonNullable<ReturnType<typeof useQuery<typeof api.agentConfig.toolCatalog>>>[number];
+
 function AgentsTab({ isOwner }: { isOwner: boolean }) {
-  const { t, locale } = useT();
   const agents = useQuery(api.agentConfig.list);
   const tools = useQuery(api.agentConfig.toolCatalog);
-  const update = useMutation(api.agentConfig.update);
-  const [drafts, setDrafts] = useState<Record<string, { systemPrompt: string; defaultModel: string; monthlyBudgetUsd: number; maxStepsPerTask: number; enabled: boolean; allowedTools: string[] }>>({});
-
-  useEffect(() => {
-    if (!agents) return;
-    setDrafts((d) => {
-      const next = { ...d };
-      for (const a of agents) if (!next[a.slug]) next[a.slug] = { systemPrompt: a.systemPrompt, defaultModel: a.defaultModel, monthlyBudgetUsd: a.monthlyBudgetUsd, maxStepsPerTask: a.maxStepsPerTask, enabled: a.enabled, allowedTools: a.allowedTools };
-      return next;
-    });
-  }, [agents]);
-
   return (
     <div className="space-y-4">
-      {agents?.map((a) => {
-        const d = drafts[a.slug];
-        if (!d) return null;
-        const agentTools = (tools ?? []).filter((tl) => tl.allowedAgents.includes(a.slug));
-        return (
-          <Card key={a.slug}>
-            <CardHeader>
-              <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-                <span className="flex items-center gap-2">
-                  <AgentBadge slug={a.slug} /> {a.name}
-                  <span className="text-xs text-muted-foreground">v{a.promptVersion}</span>
-                </span>
-                <label className="flex items-center gap-2 text-sm">
-                  <Switch checked={d.enabled} disabled={!isOwner} onCheckedChange={(v) => setDrafts({ ...drafts, [a.slug]: { ...d, enabled: !!v } })} /> مفعّل
-                </label>
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">{a.description}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Field label={t.settings.systemPrompt}>
-                <Textarea rows={10} value={d.systemPrompt} disabled={!isOwner} onChange={(e) => setDrafts({ ...drafts, [a.slug]: { ...d, systemPrompt: e.target.value } })} className="text-xs leading-relaxed" />
-              </Field>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label={t.settings.defaultModel}>
-                  <Input dir="ltr" value={d.defaultModel} disabled={!isOwner} onChange={(e) => setDrafts({ ...drafts, [a.slug]: { ...d, defaultModel: e.target.value } })} />
-                </Field>
-                <Field label={t.settings.monthlyBudget}>
-                  <Input type="number" dir="ltr" value={d.monthlyBudgetUsd} disabled={!isOwner} onChange={(e) => setDrafts({ ...drafts, [a.slug]: { ...d, monthlyBudgetUsd: Number(e.target.value) } })} />
-                </Field>
-                <Field label={t.settings.maxSteps}>
-                  <Input type="number" dir="ltr" value={d.maxStepsPerTask} disabled={!isOwner} onChange={(e) => setDrafts({ ...drafts, [a.slug]: { ...d, maxStepsPerTask: Number(e.target.value) } })} />
-                </Field>
-              </div>
-              <Field label={t.settings.tools}>
-                <div className="grid gap-1 rounded-lg border p-2 text-xs sm:grid-cols-2">
-                  {agentTools.map((tl) => (
-                    <label key={tl.name} className="flex items-start gap-1.5">
-                      <Checkbox checked={d.allowedTools.includes(tl.name)} disabled={!isOwner} onCheckedChange={(v) => setDrafts({ ...drafts, [a.slug]: { ...d, allowedTools: v ? [...d.allowedTools, tl.name] : d.allowedTools.filter((x) => x !== tl.name) } })} />
-                      <span>
-                        <span className="font-mono" dir="ltr">
-                          {tl.name}
-                        </span>{" "}
-                        <span className="text-muted-foreground">
-                          ({tl.kind}
-                          {tl.requiresApproval ? " · يتطلب اعتماداً" : ""})
-                        </span>
-                        <div className="text-muted-foreground">{tl.description}</div>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              {isOwner && (
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    update({ slug: a.slug, patch: d })
-                      .then(() => toast.success(t.common.save))
-                      .catch((e) => toast.error((e as { data?: { message?: string } }).data?.message ?? e.message))
-                  }
-                >
-                  {t.common.save}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
+      {agents?.map((a) => <AgentCard key={`${a.slug}-${a.promptVersion}`} agent={a} tools={(tools ?? []).filter((tl) => tl.allowedAgents.includes(a.slug))} isOwner={isOwner} />)}
       {!agents?.length && <EmptyState>لم تُبذر الوكلاء بعد — شغّل npm run seed:owner.</EmptyState>}
-      <span className="hidden">{locale}</span>
     </div>
+  );
+}
+
+/** One editable card per agent; local draft state starts from the server row (the key resets it on new versions). */
+function AgentCard({ agent: a, tools: agentTools, isOwner }: { agent: AgentRow; tools: ToolRow[]; isOwner: boolean }) {
+  const { t } = useT();
+  const update = useMutation(api.agentConfig.update);
+  const [d, setD] = useState({ systemPrompt: a.systemPrompt, defaultModel: a.defaultModel, monthlyBudgetUsd: a.monthlyBudgetUsd, maxStepsPerTask: a.maxStepsPerTask, enabled: a.enabled, allowedTools: a.allowedTools });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2">
+            <AgentBadge slug={a.slug} /> {a.name}
+            <span className="text-xs text-muted-foreground">v{a.promptVersion}</span>
+          </span>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={d.enabled} disabled={!isOwner} onCheckedChange={(v) => setD({ ...d, enabled: !!v })} /> مفعّل
+          </label>
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">{a.description}</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Field label={t.settings.systemPrompt}>
+          <Textarea rows={10} value={d.systemPrompt} disabled={!isOwner} onChange={(e) => setD({ ...d, systemPrompt: e.target.value })} className="text-xs leading-relaxed" />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t.settings.defaultModel}>
+            <Input dir="ltr" value={d.defaultModel} disabled={!isOwner} onChange={(e) => setD({ ...d, defaultModel: e.target.value })} />
+          </Field>
+          <Field label={t.settings.monthlyBudget}>
+            <Input type="number" dir="ltr" value={d.monthlyBudgetUsd} disabled={!isOwner} onChange={(e) => setD({ ...d, monthlyBudgetUsd: Number(e.target.value) })} />
+          </Field>
+          <Field label={t.settings.maxSteps}>
+            <Input type="number" dir="ltr" value={d.maxStepsPerTask} disabled={!isOwner} onChange={(e) => setD({ ...d, maxStepsPerTask: Number(e.target.value) })} />
+          </Field>
+        </div>
+        <Field label={t.settings.tools}>
+          <div className="grid gap-1 rounded-lg border p-2 text-xs sm:grid-cols-2">
+            {agentTools.map((tl) => (
+              <label key={tl.name} className="flex items-start gap-1.5">
+                <Checkbox checked={d.allowedTools.includes(tl.name)} disabled={!isOwner} onCheckedChange={(v) => setD({ ...d, allowedTools: v ? [...d.allowedTools, tl.name] : d.allowedTools.filter((x) => x !== tl.name) })} />
+                <span>
+                  <span className="font-mono" dir="ltr">
+                    {tl.name}
+                  </span>{" "}
+                  <span className="text-muted-foreground">
+                    ({tl.kind}
+                    {tl.requiresApproval ? " · يتطلب اعتماداً" : ""})
+                  </span>
+                  <div className="text-muted-foreground">{tl.description}</div>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Field>
+        {isOwner && (
+          <Button
+            size="sm"
+            onClick={() =>
+              update({ slug: a.slug, patch: d })
+                .then(() => toast.success(t.common.save))
+                .catch((e) => toast.error((e as { data?: { message?: string } }).data?.message ?? e.message))
+            }
+          >
+            {t.common.save}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -186,12 +178,10 @@ type SaveFn = (key: string, value: Record<string, unknown>) => Promise<void>;
 
 function ModelsTab({ routing, escalation, runtime, onSave, hints }: { routing: Record<string, unknown>; escalation: Record<string, unknown>; runtime: Record<string, unknown>; onSave: SaveFn; hints: { llmProvider: string; llmProviderConfigured: boolean } }) {
   const { t } = useT();
+  // Drafts start from the saved values; the tab is mounted only once settings are loaded.
   const [r, setR] = useState(routing);
   const [e, setE] = useState(escalation);
   const [rt, setRt] = useState(runtime);
-  useEffect(() => setR(routing), [routing]);
-  useEffect(() => setE(escalation), [escalation]);
-  useEffect(() => setRt(runtime), [runtime]);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -255,7 +245,6 @@ function BudgetTab({ budget, onSave }: { budget: Record<string, unknown>; onSave
   const { t } = useT();
   const usage = useQuery(api.usage.monthly, {});
   const [b, setB] = useState(budget);
-  useEffect(() => setB(budget), [budget]);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -304,32 +293,178 @@ function BudgetTab({ budget, onSave }: { budget: Record<string, unknown>; onSave
   );
 }
 
-function AutoApproveTab({ value, onSave }: { value: { kinds: string[]; faqAutoReply: boolean }; onSave: SaveFn }) {
+type AutoApproveValue = { kinds: string[]; faqAutoReply: boolean; followUpKinds: string[]; maxPerDay: number; quietHours: { enabled: boolean; startHour: number; endHour: number } };
+const NEVER_AUTO = ["CONFIRM_BOOKING", "SENSITIVE_CHANGE", "DATA_MERGE"];
+
+function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: SaveFn }) {
   const { t, locale } = useT();
-  const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  const [v, setV] = useState<AutoApproveValue>({ ...value, followUpKinds: value.followUpKinds ?? [], maxPerDay: value.maxPerDay ?? 20, quietHours: value.quietHours ?? { enabled: true, startHour: 22, endHour: 8 } });
+  const log = useQuery(api.settings.autoApprovals, { limit: 30 });
+  const hours = Array.from({ length: 24 }, (_, i) => i);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t.settings.autoApprove}</CardTitle>
-        <p className="text-xs text-muted-foreground">الأنواع المحددة تُنفَّذ دون مراجعة (عدا D4). تأكيد الحجوزات والتغييرات الحساسة لا تقبل الاعتماد التلقائي.</p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-1 sm:grid-cols-2">
-          {APPROVAL_KINDS.filter((k) => k !== "CONFIRM_BOOKING" && k !== "SENSITIVE_CHANGE").map((k) => (
-            <label key={k} className="flex items-center gap-2 text-sm">
-              <Checkbox checked={v.kinds.includes(k)} onCheckedChange={(c) => setV({ ...v, kinds: c ? [...v.kinds, k] : v.kinds.filter((x) => x !== k) })} /> {labelOf(k, locale)}
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t.settings.autoApprove}</CardTitle>
+          <p className="text-xs text-muted-foreground">{t.settings.autoHint}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Field label={t.settings.autoKinds}>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {APPROVAL_KINDS.filter((k) => !NEVER_AUTO.includes(k)).map((k) => (
+                <label key={k} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={v.kinds.includes(k)} onCheckedChange={(c) => setV({ ...v, kinds: c ? [...v.kinds, k] : v.kinds.filter((x) => x !== k) })} /> {labelOf(k, locale)}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <Field label={t.settings.autoFollowUps}>
+            <div className="grid gap-1 sm:grid-cols-3">
+              {FOLLOW_UP_KINDS.map((k) => (
+                <label key={k} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={v.followUpKinds.includes(k)} onCheckedChange={(c) => setV({ ...v, followUpKinds: c ? [...v.followUpKinds, k] : v.followUpKinds.filter((x) => x !== k) })} /> {labelOf(k, locale)}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={v.faqAutoReply} onCheckedChange={(c) => setV({ ...v, faqAutoReply: !!c })} /> {t.settings.autoFaq}
+          </label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label={t.settings.maxPerDay}>
+              <Input type="number" dir="ltr" min={0} max={500} value={v.maxPerDay} onChange={(e) => setV({ ...v, maxPerDay: Number(e.target.value) })} />
+            </Field>
+            <Field label={t.settings.quietFrom}>
+              <select className="h-8 rounded-md border bg-background px-2 text-sm" dir="ltr" value={v.quietHours.startHour} onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, startHour: Number(e.target.value) } })}>
+                {hours.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t.settings.quietTo}>
+              <select className="h-8 rounded-md border bg-background px-2 text-sm" dir="ltr" value={v.quietHours.endHour} onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, endHour: Number(e.target.value) } })}>
+                {hours.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={v.quietHours.enabled} onCheckedChange={(c) => setV({ ...v, quietHours: { ...v.quietHours, enabled: !!c } })} /> {t.settings.quietHours}
+          </label>
+          <Button size="sm" onClick={() => onSave("autoApprove", v)}>
+            {t.common.save}
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t.settings.autoLog}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm">
+          {log?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
+          {log?.map((a) => (
+            <Link key={a._id} href={`/approvals?id=${a._id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 hover:bg-muted">
+              <div className="min-w-0">
+                <div className="truncate font-medium">{a.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {a.businessId} · {formatDate(a.decidedAt, locale, true)} · {a.decisionReason}
+                </div>
+                {a.executionError && <div className="text-xs text-destructive">{a.executionError}</div>}
+              </div>
+              <span className="flex items-center gap-1">
+                <AgentBadge slug={a.agentSlug} />
+                <StatusBadge value={a.status} />
+              </span>
+            </Link>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+type ScheduledValue = { dailyDigest: boolean; leadFollowUpReminders: boolean; leadRemindersPerDay: number; weeklyExecutiveSummary: boolean; lifecycleFollowUps: boolean };
+const JOB_LABEL: Record<string, keyof typeof ar.settings> = { dailyDigest: "dailyDigest", leadFollowUpReminders: "leadReminders", weeklyExecutiveSummary: "weeklySummary", lifecycleFollowUps: "lifecycleFollowUps" };
+
+function ScheduledTab({ value, onSave, isOwner }: { value: ScheduledValue; onSave: SaveFn; isOwner: boolean }) {
+  const { t, locale } = useT();
+  const [v, setV] = useState<ScheduledValue>(value);
+  const status = useQuery(api.scheduled.status);
+  const runNow = useMutation(api.scheduled.runNow);
+  const [busy, setBusy] = useState<string | null>(null);
+  async function run(job: string) {
+    setBusy(job);
+    try {
+      const r = await runNow({ job });
+      toast.success(`${t.settings.runNow}: ${JSON.stringify(r)}`);
+    } catch (e) {
+      toast.error((e as { data?: { message?: string } }).data?.message ?? (e instanceof Error ? e.message : t.common.error));
+    } finally {
+      setBusy(null);
+    }
+  }
+  const toggles: { key: keyof ScheduledValue; label: string; job: string }[] = [
+    { key: "dailyDigest", label: t.settings.dailyDigest, job: "dailyDigest" },
+    { key: "lifecycleFollowUps", label: t.settings.lifecycleFollowUps, job: "lifecycleFollowUps" },
+    { key: "leadFollowUpReminders", label: t.settings.leadReminders, job: "leadFollowUpReminders" },
+    { key: "weeklyExecutiveSummary", label: t.settings.weeklySummary, job: "weeklyExecutiveSummary" },
+  ];
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t.settings.scheduled}</CardTitle>
+          <p className="text-xs text-muted-foreground">{t.settings.scheduledHint}</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {toggles.map((tg) => (
+            <label key={tg.key} className="flex items-center gap-2 text-sm">
+              <Switch checked={!!v[tg.key]} disabled={!isOwner} onCheckedChange={(c) => setV({ ...v, [tg.key]: !!c })} /> {tg.label}
             </label>
           ))}
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={v.faqAutoReply} onCheckedChange={(c) => setV({ ...v, faqAutoReply: !!c })} /> رد تلقائي على الأسئلة الشائعة (المرحلة 3)
-        </label>
-        <Button size="sm" onClick={() => onSave("autoApprove", v)}>
-          {t.common.save}
-        </Button>
-      </CardContent>
-    </Card>
+          <Field label={t.settings.leadRemindersPerDay}>
+            <Input type="number" dir="ltr" min={0} max={50} value={v.leadRemindersPerDay} disabled={!isOwner} onChange={(e) => setV({ ...v, leadRemindersPerDay: Number(e.target.value) })} />
+          </Field>
+          {isOwner && (
+            <Button size="sm" onClick={() => onSave("scheduledTasks", v)}>
+              {t.common.save}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t.settings.jobs}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {status?.map((s) => (
+            <div key={s.job} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
+              <div className="min-w-0">
+                <div className="font-medium">{t.settings[JOB_LABEL[s.job]]}</div>
+                <div className="text-xs text-muted-foreground">
+                  {s.enabled ? t.settings.enabled : t.settings.disabled} · {t.settings.lastRun}: {s.lastRunAt ? formatDate(s.lastRunAt, locale, true) : t.settings.never}
+                  {s.lastResult && (
+                    <span dir="ltr" className="ms-1 font-mono">
+                      {JSON.stringify(Object.fromEntries(Object.entries(s.lastResult).filter(([k]) => k !== "job" && k !== "manual")))}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {isOwner && (
+                <Button size="xs" variant="outline" disabled={busy !== null} onClick={() => run(s.job)}>
+                  {t.settings.runNow}
+                </Button>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -362,7 +497,6 @@ function IntegrationsTab({ value, hints, onSave }: { value: Record<string, unkno
 function CompanyTab({ value, onSave }: { value: Record<string, unknown>; onSave: SaveFn }) {
   const { t } = useT();
   const [c, setC] = useState(value);
-  useEffect(() => setC(value), [value]);
   return (
     <Card>
       <CardHeader>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { StatusBadge, TrustBadge } from "@/components/badges";
@@ -40,15 +40,12 @@ export default function EntityPage() {
   const rows = useQuery(api.records.list, def ? { entity: def.key, search: search || undefined, status: status === "ALL" ? undefined : status, limit: 200 } : "skip") as AnyRecord[] | undefined;
   const [selectedId, setSelectedId] = useState<string | null>(params.get("id"));
   const detail = useQuery(api.records.get, def && selectedId ? { entity: def.key, id: selectedId } : "skip");
-  const [formOpen, setFormOpen] = useState(false);
+  // `?new=1` opens the create form on first render.
+  const [formOpen, setFormOpen] = useState(() => params.get("new") === "1");
   const [editing, setEditing] = useState<AnyRecord | undefined>(undefined);
   const [importOpen, setImportOpen] = useState(false);
   const archive = useMutation(api.records.archive);
   const verify = useMutation(api.records.verify);
-
-  useEffect(() => {
-    if (params.get("new") === "1") setFormOpen(true);
-  }, [params]);
 
   if (!def) return <EmptyState>كيان غير معروف</EmptyState>;
   const columns = def.fields.filter((f) => !f.sensitive && f.type !== "textarea").slice(0, 6);

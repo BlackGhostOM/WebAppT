@@ -26,7 +26,7 @@ import {
 import { proposeMemory, recordConflict } from "../services/governance";
 import { keywordSearch, recordCitations, recordKnowledgeGap } from "../services/knowledge";
 import { createRecord, getRecord, listRecords, updateRecord } from "../services/records";
-import { computeKpis, pipelineReport } from "../services/reports";
+import { agentPerformance, bookingsReport, computeKpis, costReport, monthlySeries, pipelineReport, supportReport } from "../services/reports";
 import { createCampaign, proposeFollowUp, scheduleContent } from "../services/sales";
 import { proposeReply } from "../services/support";
 import { createTask, listActiveTasks } from "../services/tasks";
@@ -75,6 +75,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   { name: "search_content", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["executive", "sales"], description: "تقويم المحتوى: المنشورات المقترحة والمعتمدة والمنشورة.", inputSchema: obj({ status: enumOf(V.CONTENT_STATUSES, "الحالة (اختياري)") }) },
   { name: "search_interactions", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["executive", "support"], description: "رسائل العملاء في الصندوق الموحد.", inputSchema: obj({ customerId: str("معرّف العميل (اختياري)"), status: enumOf(V.INTERACTION_STATUSES, "الحالة (اختياري)"), limit: int("الحد الأقصى") }) },
   { name: "search_knowledge", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ALL, description: "بحث دلالي في المستندات المعتمدة فقط (سياسات، إجراءات، عقود، أدلة). يعيد مقاطع مُسنَدة بإصدار المستند.", inputSchema: obj({ query: str("السؤال"), asOf: str("تاريخ الحدث ISO لاختيار السياسة السارية حينه (اختياري)"), limit: int("الحد الأقصى") }, ["query"]) },
+  { name: "get_report", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["executive", "sales", "support"], description: "تقارير محسوبة من قاعدة البيانات: monthly_series (6 أشهر: استفسارات/عملاء/عروض/حجوزات/إيراد/تكلفة)، support (خدمة العملاء: القنوات، التصنيفات، زمن الاستجابة، التصعيد، الرد التلقائي)، agent_performance (المهام والاعتمادات لكل وكيل)، cost (التكلفة اليومية والتوقع لنهاية الشهر)، bookings (الحجوزات حسب الحالة والمنتج والمغادرات القادمة).", inputSchema: obj({ kind: enumOf(["monthly_series", "support", "agent_performance", "cost", "bookings"], "نوع التقرير"), month: str("الشهر YYYY-MM (اختياري)"), days: int("عدد الأيام لتقرير خدمة العملاء (افتراضي 30)"), months: int("عدد الأشهر للسلسلة (افتراضي 6)") }, ["kind"]) },
   { name: "list_pending_approvals", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["executive"], description: "ما ينتظر اعتماد المالك حالياً.", inputSchema: obj({}) },
   { name: "list_tasks", kind: "read", severity: "D1", requiresApproval: false, allowedAgents: ["executive"], description: "المهام الجارية والمنتظرة في النظام.", inputSchema: obj({}) },
   // -------------------------------------------------------- write_internal
@@ -517,6 +518,26 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
       }
       case "pipeline_report":
         return { content: json(await pipelineReport(ctx, { staleDays: n(input, "staleDays") })) };
+      case "get_report": {
+        const kind = s(input, "kind");
+        // Specialists see only their own domain; the executive sees everything.
+        const allowed: Record<string, string[]> = { executive: ["monthly_series", "support", "agent_performance", "cost", "bookings"], sales: ["monthly_series", "bookings"], support: ["support", "bookings"], product: [] };
+        if (!kind || !(allowed[agent.slug] ?? []).includes(kind)) return { content: `kind غير مسموح لهذا الوكيل. المسموح: ${(allowed[agent.slug] ?? []).join(", ") || "لا شيء"}`, isError: true };
+        const month = s(input, "month");
+        const validMonth = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : undefined;
+        switch (kind) {
+          case "monthly_series":
+            return { content: json(await monthlySeries(ctx, n(input, "months") ?? 6)) };
+          case "support":
+            return { content: json(await supportReport(ctx, { days: n(input, "days") ?? 30 })) };
+          case "agent_performance":
+            return { content: json(await agentPerformance(ctx, validMonth)) };
+          case "cost":
+            return { content: json(await costReport(ctx, validMonth)) };
+          default:
+            return { content: json(await bookingsReport(ctx)) };
+        }
+      }
       case "create_lead": {
         const result = await createRecord(ctx, actor, "leads", {
           contactName: s(input, "contactName"),

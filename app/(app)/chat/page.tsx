@@ -22,7 +22,9 @@ const ACTIVE = new Set(["QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_SUBTAS
 export default function ChatPage() {
   const { t, locale } = useT();
   const conversations = useQuery(api.chat.listConversations);
-  const [conversationId, setConversationId] = useState<Id<"conversations"> | undefined>(undefined);
+  const [chosenConversationId, setConversationId] = useState<Id<"conversations"> | undefined>(undefined);
+  // Most recent conversation by default; no effect needed to pick it.
+  const conversationId = chosenConversationId ?? conversations?.[0]?._id;
   const data = useQuery(api.chat.getConversation, { conversationId });
   const emergency = useQuery(api.tasks.emergencyStatus);
   const send = useMutation(api.chat.send);
@@ -33,10 +35,6 @@ export default function ChatPage() {
   const [premium, setPremium] = useState(false);
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!conversationId && conversations && conversations.length > 0) setConversationId(conversations[0]._id);
-  }, [conversations, conversationId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

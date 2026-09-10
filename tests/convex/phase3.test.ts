@@ -181,7 +181,8 @@ describe("Phase 3 — support agent: classification, escalation, approvals", () 
     const off = await h.t.run(async (ctx) => executeTool(ctx, ta.task, ta.agent, "propose_reply", { interactionId: a.interactionId, kind: "INQUIRY", confidence: 0.95, reply: "الإلغاء مجاني قبل 7 أيام من الرحلة وفق سياستنا.", faq: true }));
     expect((await h.t.run(async (ctx) => ctx.db.get(off.approvalId!)))?.status).toBe("PENDING");
 
-    await h.asOwner.mutation(api.settings.update, { key: "autoApprove", value: { kinds: [], faqAutoReply: true } });
+    // Quiet hours are disabled here so the test does not depend on the wall clock (Phase 4 rule engine).
+    await h.asOwner.mutation(api.settings.update, { key: "autoApprove", value: { kinds: [], faqAutoReply: true, quietHours: { enabled: false, startHour: 22, endHour: 8 } } });
     // Rule on + faq + high confidence + no price → auto-approved and executed.
     const b = await inbound(h, { externalSenderId: "ig-b", body: "ما سياسة الإلغاء؟" });
     const tb = await supportTaskFor(h, b.interactionId);

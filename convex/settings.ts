@@ -13,7 +13,8 @@ import { ownerActor, requireOwner, requireUser, requireUserIdInAction } from "./
 import { appendAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
 import { DEFAULT_SETTINGS, getAllSettings, type SettingKey, setSetting, SETTING_KEYS } from "./lib/settings";
-import { APPROVAL_KINDS, isOneOf, USER_ROLES } from "./lib/vocab";
+import { APPROVAL_KINDS, FOLLOW_UP_KINDS, isOneOf, USER_ROLES } from "./lib/vocab";
+import { listAutoApproved, NEVER_AUTO_APPROVE } from "./services/approvals";
 
 export const getAll = query({
   args: {},
@@ -55,11 +56,22 @@ function validateSetting(key: SettingKey, value: Record<string, unknown>) {
     if (b.alertThresholdPercent !== undefined && (b.alertThresholdPercent < 1 || b.alertThresholdPercent > 100)) throw appError("VALIDATION", "alertThresholdPercent: بين 1 و100", { field: "alertThresholdPercent" });
   }
   if (key === "autoApprove") {
-    const a = value as { kinds?: unknown };
+    const a = value as { kinds?: unknown; followUpKinds?: unknown; maxPerDay?: unknown; quietHours?: unknown };
     if (a.kinds !== undefined) {
       if (!Array.isArray(a.kinds) || !a.kinds.every((k) => isOneOf(APPROVAL_KINDS, k))) throw appError("VALIDATION", "kinds: أنواع اعتماد غير معيارية", { field: "kinds" });
-      if ((a.kinds as string[]).includes("CONFIRM_BOOKING") || (a.kinds as string[]).includes("SENSITIVE_CHANGE")) throw appError("VALIDATION", "kinds: تأكيد الحجوزات والتغييرات الحساسة لا تقبل الاعتماد التلقائي", { field: "kinds" });
+      if ((a.kinds as string[]).some((k) => NEVER_AUTO_APPROVE.includes(k as never))) throw appError("VALIDATION", "kinds: تأكيد الحجوزات والتغييرات الحساسة ودمج البيانات لا تقبل الاعتماد التلقائي", { field: "kinds" });
     }
+    if (a.followUpKinds !== undefined && (!Array.isArray(a.followUpKinds) || !a.followUpKinds.every((k) => isOneOf(FOLLOW_UP_KINDS, k)))) throw appError("VALIDATION", "followUpKinds: أنواع متابعة غير معيارية", { field: "followUpKinds" });
+    if (a.maxPerDay !== undefined && (typeof a.maxPerDay !== "number" || !Number.isInteger(a.maxPerDay) || a.maxPerDay < 0 || a.maxPerDay > 500)) throw appError("VALIDATION", "maxPerDay: عدد صحيح بين 0 و500", { field: "maxPerDay" });
+    if (a.quietHours !== undefined) {
+      const q = a.quietHours as { enabled?: unknown; startHour?: unknown; endHour?: unknown };
+      const hourOk = (h: unknown) => typeof h === "number" && Number.isInteger(h) && h >= 0 && h <= 23;
+      if (typeof q?.enabled !== "boolean" || !hourOk(q.startHour) || !hourOk(q.endHour)) throw appError("VALIDATION", "quietHours: ساعات بين 0 و23", { field: "quietHours" });
+    }
+  }
+  if (key === "scheduledTasks") {
+    const st = value as { leadRemindersPerDay?: unknown };
+    if (st.leadRemindersPerDay !== undefined && (typeof st.leadRemindersPerDay !== "number" || !Number.isInteger(st.leadRemindersPerDay) || st.leadRemindersPerDay < 0 || st.leadRemindersPerDay > 50)) throw appError("VALIDATION", "leadRemindersPerDay: عدد صحيح بين 0 و50", { field: "leadRemindersPerDay" });
   }
   if (key === "emergencyStop") throw appError("FORBIDDEN", "الإيقاف الطارئ يُدار من أزرار الإيقاف لا من الإعدادات");
 }
@@ -77,6 +89,16 @@ export const update = mutation({
     const { old, merged } = await setSetting(ctx, k, filtered as never, ownerActor(user));
     await appendAudit(ctx, { actor: ownerActor(user), table: "settings", recordId: k, event: "UPDATE", oldValue: old, newValue: merged, severity: "D3" });
     return null;
+  },
+});
+
+/** What the rule engine decided on its own (transparency for the owner). */
+export const autoApprovals = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    await requireUser(ctx);
+    const rows = await listAutoApproved(ctx, limit ?? 50);
+    return rows.map((a) => ({ _id: a._id, businessId: a.businessId, kind: a.kind, title: a.title, status: a.status, severity: a.severity, agentSlug: a.agentSlug, decidedAt: a.decidedAt, decisionReason: a.decisionReason, executionError: a.executionError }));
   },
 });
 

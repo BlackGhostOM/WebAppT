@@ -28,6 +28,7 @@ convex/
   schema.ts               12 domains; MVP tables implemented (1.2: channelIdentities, followUps), the rest as // Phase 2+
   inbound/                http.ts (webhook + contact form), pipeline.ts (internal receive), delivery.ts (Graph API send)
   inbox.ts / followUps.ts owner-facing unified inbox API and post-sale follow-ups API
+  reports.ts / scheduled.ts reports API (Phase 4) and scheduled-jobs API (cron entry + owner run-now + status)
   lib/vocab.ts            Controlled vocabulary (as const) — the ONLY place statuses/types live
   lib/baseFields.ts       Shared provenance/trust/validity/version fields + money & citation validators
   lib/ids.ts              businessId generator (counters table)
@@ -82,6 +83,14 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   META_APP_SECRET is unset, outbound logged only) or `live` (webhook signature enforced, replies sent via Graph API
   with META_PAGE_ACCESS_TOKEN). WhatsApp: not connected (outbound logged with deliveryStatus NOT_CONNECTED).
 
+## Automation (Phase 4)
+- `createApproval` runs the rule engine; `autoApprove(..., { faqEligible })` re-runs it for the FAQ path. Rules and caps
+  live in `settings.autoApprove`; automatic decisions are actor `system:auto_approve_rule` and execute via the normal executor.
+- Cron jobs call `internal.scheduled.run({ job })`; each job checks its switch in `settings.scheduledTasks`, the emergency
+  stop and agent enablement, and audits one SYSTEM row per run. Model-backed jobs create tasks with origin `system`
+  (requestedBy `cron:<job>`); `runtime.completeTask` notifies the owner for those.
+- Reports are pure read models in `services/reports.ts`; never store computed KPIs.
+
 ## Inbound channels (Phase 3)
 - HTTP (convex/http.ts → convex/inbound/http.ts): `GET/POST /webhooks/instagram`, `POST /api/contact` (10/min per IP,
   honeypot field `website`). Both call `services/inbox.ts::receiveInbound` → customer match (channelIdentities → phone/email
@@ -103,4 +112,10 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   simulator), customer matching via channel identities, per-message support tasks with one-shot model escalation and
   executive escalation for complaints, FAQ auto-reply gate, owner one-click approve/edit/reject + direct reply, live
   Instagram delivery action, post-sale follow-ups (welcome/reminder/survey) via cron + approvals. Schema 1.2.
-- Phase 4: reports, auto-approval rules UI, WhatsApp connection, Vercel/Convex deployment guide (docs/DEPLOY.md).
+- Phase 4 (operations): done — auto-approval rule engine (`services/approvals.ts::evaluateAutoApproval`: kind /
+  follow-up / FAQ rules, daily cap, quiet hours, never D4), scheduled jobs (`services/scheduled.ts`: daily digest,
+  lead follow-up reminders, weekly executive summary, lifecycle follow-ups; owner switches + "run now"; last run from
+  auditLog), reports (`services/reports.ts` + `/reports`: monthly series, support, agent performance, cost projection,
+  bookings; `get_report` tool; SVG charts in `components/charts.tsx`; CSV export), dashboard trend cards, ESLint clean,
+  docs/DEPLOY.md.
+- Next: WhatsApp Cloud API connection, Batch API path for non-urgent tasks, finance domain (P2+ tables).

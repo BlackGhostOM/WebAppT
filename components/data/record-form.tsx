@@ -1,7 +1,7 @@
 "use client";
 
 import { useConvex, useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -175,34 +175,41 @@ interface RecordFormProps {
   onSaved?: (id: string) => void;
 }
 
+/** Sensible defaults for a new record of this entity. */
+function defaultValues(def: EntityDef): Values {
+  const defaults: Values = {};
+  for (const f of def.fields) {
+    if (f.type === "enum" && f.required && f.options) defaults[f.name] = f.name === def.statusField ? (def.key === "products" ? "IDEA" : def.key === "leads" ? "NEW_LEAD" : def.key === "policies" ? "DRAFT" : f.options.includes("ACTIVE") ? "ACTIVE" : f.options[0]) : f.options.includes("ar") ? "ar" : undefined;
+    if (f.name === "consentStatus") defaults[f.name] = "PENDING";
+    if (f.name === "rateTrust") defaults[f.name] = "CONTRACTED";
+    if (f.name === "paymentStatus") defaults[f.name] = "UNPAID";
+    if (f.type === "boolean") defaults[f.name] = f.name === "taxesIncluded" ? true : false;
+  }
+  return defaults;
+}
+
+/**
+ * The dialog shell. The form body is mounted only while open and keyed by the
+ * record being edited, so its state starts fresh every time without effects.
+ */
 export function RecordFormDialog({ def, open, onOpenChange, existing, onSaved }: RecordFormProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">{open && <RecordFormBody key={`${def.key}:${existing?._id ?? "new"}`} def={def} onOpenChange={onOpenChange} existing={existing} onSaved={onSaved} />}</DialogContent>
+    </Dialog>
+  );
+}
+
+function RecordFormBody({ def, onOpenChange, existing, onSaved }: Omit<RecordFormProps, "open">) {
   const { t, locale } = useT();
   const convex = useConvex();
-  const refOptions = useQuery(api.records.refOptions, open ? { entity: def.key } : "skip") ?? {};
+  const refOptions = useQuery(api.records.refOptions, { entity: def.key }) ?? {};
   const create = useMutation(api.records.create);
   const update = useMutation(api.records.update);
-  const [values, setValues] = useState<Values>({});
+  const [values, setValues] = useState<Values>(() => (existing ? recordToValues(def, existing) : defaultValues(def)));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<{ _id: string; businessId: string; label: string; matchedOn: string[] }[] | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    if (existing) setValues(recordToValues(def, existing));
-    else {
-      const defaults: Values = {};
-      for (const f of def.fields) {
-        if (f.type === "enum" && f.required && f.options) defaults[f.name] = f.name === def.statusField ? (def.key === "products" ? "IDEA" : def.key === "leads" ? "NEW_LEAD" : def.key === "policies" ? "DRAFT" : f.options.includes("ACTIVE") ? "ACTIVE" : f.options[0]) : f.options.includes("ar") ? "ar" : undefined;
-        if (f.name === "consentStatus") defaults[f.name] = "PENDING";
-        if (f.name === "rateTrust") defaults[f.name] = "CONTRACTED";
-        if (f.name === "paymentStatus") defaults[f.name] = "UNPAID";
-        if (f.type === "boolean") defaults[f.name] = f.name === "taxesIncluded" ? true : false;
-      }
-      setValues(defaults);
-    }
-    setErrors({});
-    setDuplicates(null);
-  }, [open, existing, def]);
 
   const sections = useMemo(() => {
     const main = def.fields.filter((f) => !f.section && !f.readOnly);
@@ -258,8 +265,7 @@ export function RecordFormDialog({ def, open, onOpenChange, existing, onSaved }:
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+    <>
         <DialogHeader>
           <DialogTitle>
             {existing ? t.common.edit : t.data.newRecord}: {def.singularAr}
@@ -312,7 +318,6 @@ export function RecordFormDialog({ def, open, onOpenChange, existing, onSaved }:
         <p className="text-[11px] text-muted-foreground">
           {locale === "ar" ? "كل ما تُدخله يُوسم: مصدر بشري، تحقق بشري، ثقة الشركة (A) تلقائياً ويُسجَّل في التدقيق." : "Everything you enter is stamped human source / human verified / company trust (A) and audited."}
         </p>
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 # قاموس المؤشرات — KPI Dictionary
 
-كل مؤشر يُحسب من قاعدة البيانات مباشرة (`convex/agents/tools.ts::computeKpis`, `convex/dashboard.ts`, `convex/services/usage.ts`)، لا من تقدير النموذج. الفترة الافتراضية: الشهر التقويمي (UTC) `monthKey = YYYY-MM`.
+كل مؤشر يُحسب من قاعدة البيانات مباشرة (`convex/services/reports.ts`, `convex/dashboard.ts`, `convex/services/usage.ts`)، لا من تقدير النموذج. الفترة الافتراضية: الشهر التقويمي (UTC) `monthKey = YYYY-MM`. صفحة التقارير (`/reports`) وأداة الوكيل `get_report` تعرضان نفس الدوال.
 
 | المؤشر | المعادلة | البسط | المقام | مصدر البيانات | التكرار | المالك | الهدف |
 |---|---|---|---|---|---|---|---|
@@ -25,7 +25,16 @@
 | **Unsupported Fact Rate** | مهام الوكلاء المتخصصين المكتملة بلا استشهادات ÷ كل المهام المكتملة × 100 | `tasks.status = COMPLETED` و`citations = []` و`agentSlug ≠ executive` | `tasks` المكتملة في الشهر | `tasks` | شهري | executive | ≤ 20% |
 | **Human Override Rate** | (مرفوض + معتمد بعد تعديل) ÷ كل الاعتمادات المحسومة × 100 | `approvals.status ∈ {REJECTED, EDITED_APPROVED}` أو `editedPayload` موجود | `approvals` المحسومة في الشهر | `approvals` | شهري | owner | ≤ 30% (مرتفع = الوكلاء لا يتعلمون) |
 | معدل توقف المهام | مهام FAILED/CANCELLED/BUDGET_EXCEEDED ÷ كل المهام | حسب الحالة | كل `tasks` في الفترة | `tasks` | شهري | executive | ↓ |
-| زمن الاستجابة للعميل (المرحلة 3) | متوسط (`sentAt` − `receivedAt`) للردود | ردود معتمدة ومرسلة | — | `interactions` | أسبوعي | support | ≤ 2 ساعة |
+| زمن الاستجابة للعميل | متوسط/وسيط/الشريحة 90 لـ(`sentAt` − `receivedAt`) بالدقائق | رسائل واردة لها `sentAt` (رُدّ عليها) خلال الفترة | — | `interactions` | 30 يوماً | support | الوسيط ≤ 2 ساعة |
+| معدل التصعيد | رسائل `aiClassification.escalated` ÷ الرسائل المصنّفة × 100 | مصعّدة | مصنّفة | `interactions` | 30 يوماً | support | ≤ 20% |
+| نسبة الردود التلقائية | اعتمادات `SEND_CUSTOMER_MESSAGE` قرّرها `auto_approve_rule` ÷ كل اعتمادات الرسائل المحسومة × 100 | تلقائية | محسومة | `approvals` | 30 يوماً | owner | حسب قواعد المالك |
+| أداء الوكيل: معدل الإكمال | مهام COMPLETED ÷ كل مهام الوكيل في الشهر | مكتملة | كل المهام | `tasks` | شهري | executive | ↑ |
+| أداء الوكيل: متوسط الخطوات/التكلفة/المدة | متوسط `stepCount` / `costUsd` / (`finishedAt` − `startedAt`) للمهام المنتهية | — | — | `tasks` | شهري | executive | ↓ |
+| أداء الوكيل: معدل التدخل | (مرفوض + معدّل) ÷ اعتمادات الوكيل المحسومة × 100 | حسب `agentSlug` | — | `approvals` | شهري | owner | ≤ 30% |
+| التوقع لنهاية الشهر ($) | (التكلفة حتى اليوم ÷ الأيام المنقضية) × أيام الشهر | `usageLog` الشهر الحالي | — | `usageLog` | لحظي | executive | ≤ الميزانية |
+| نسبة القراءة من الذاكرة المؤقتة | `cacheReadTokens` ÷ (`inputTokens` + `cacheReadTokens` + `cacheWriteTokens`) × 100 | — | — | `usageLog` | شهري | executive | ↑ (كلفة أقل) |
+| المغادرات القادمة | حجوزات غير ملغاة بـ`travelDateFrom` خلال 30 يوماً / حسب الشهر لستة أشهر | — | — | `bookings` | لحظي | support/ops | — |
+| متوسط فترة الحجز→السفر (يوم) | متوسط (`travelDateFrom` − `createdAt`) | حجوزات مستقبلية عند الإنشاء | — | `bookings` | لحظي | sales | — |
 
 ## ملاحظات
 - المؤشرات المالية الحقيقية (الفواتير، المدفوعات، الربحية الفعلية) تنتظر نطاق المالية (المرحلة 2+) والدفتر المحاسبي الخارجي؛ «الإيراد» هنا إيراد الحجوزات المؤكدة لا المحصّل.

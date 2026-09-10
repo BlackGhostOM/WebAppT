@@ -35,9 +35,29 @@ export interface EmergencyStopSettings {
 }
 
 export interface AutoApproveSettings {
-  /** Approval kinds the owner explicitly allowed to execute without review. */
+  /** Approval kinds the owner explicitly allowed to execute without review (never D4, never CONFIRM_BOOKING/SENSITIVE_CHANGE). */
   kinds: string[];
+  /** FAQ answers from approved knowledge may go out automatically (support agent rule). */
   faqAutoReply: boolean;
+  /** Post-sale lifecycle messages (WELCOME, PRE_TRIP_REMINDER, SATISFACTION_SURVEY) that may go out without review. */
+  followUpKinds: string[];
+  /** Safety cap on automatic approvals per UTC day; everything beyond it waits for the owner. */
+  maxPerDay: number;
+  /** No automatic approval inside these local hours (company timezone); the request waits for the owner. */
+  quietHours: { enabled: boolean; startHour: number; endHour: number };
+}
+
+export interface ScheduledTaskSettings {
+  /** 07:00 Muscat: one notification summarising what needs the owner today. */
+  dailyDigest: boolean;
+  /** 09:00 Muscat: the sales agent proposes follow-ups for leads whose nextFollowUpAt is overdue. */
+  leadFollowUpReminders: boolean;
+  /** Cap on sales tasks created per day by the reminder job (budget guard). */
+  leadRemindersPerDay: number;
+  /** Sunday 07:30 Muscat: the executive agent writes a weekly summary from data. */
+  weeklyExecutiveSummary: boolean;
+  /** 08:00 Muscat: plan and propose post-sale follow-ups from confirmed bookings. */
+  lifecycleFollowUps: boolean;
 }
 
 export interface IntegrationSettings {
@@ -67,6 +87,7 @@ export interface AllSettings {
   integrations: IntegrationSettings;
   escalation: EscalationSettings;
   agentRuntime: AgentRuntimeSettings;
+  scheduledTasks: ScheduledTaskSettings;
 }
 
 export const DEFAULT_SETTINGS: AllSettings = {
@@ -84,10 +105,11 @@ export const DEFAULT_SETTINGS: AllSettings = {
   modelRouting: DEFAULT_MODEL_ROUTING,
   budget: { monthlyBudgetUsd: 200, alertThresholdPercent: 80 },
   emergencyStop: { active: false },
-  autoApprove: { kinds: [], faqAutoReply: false },
+  autoApprove: { kinds: [], faqAutoReply: false, followUpKinds: [], maxPerDay: 20, quietHours: { enabled: true, startHour: 22, endHour: 8 } },
   integrations: { metaConnected: false, whatsappConnected: false, instagramMode: "mock", resendConfigured: false },
   escalation: { bookingValueThresholdOmr: 2000, confidenceThreshold: 0.7 },
   agentRuntime: { maxStepsPerTask: 12, maxSubtaskDepth: 2, cancelPollMs: 750 },
+  scheduledTasks: { dailyDigest: true, leadFollowUpReminders: false, leadRemindersPerDay: 5, weeklyExecutiveSummary: false, lifecycleFollowUps: true },
 };
 
 export type SettingKey = keyof AllSettings;

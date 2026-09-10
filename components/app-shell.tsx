@@ -3,6 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  BarChart3Icon,
   BellIcon,
   BookOpenIcon,
   CalendarIcon,
@@ -38,6 +39,7 @@ const NAV = [
   { href: "/products", key: "products", icon: PackageIcon },
   { href: "/inbox", key: "inbox", icon: InboxIcon },
   { href: "/pipeline", key: "pipeline", icon: TrendingUpIcon },
+  { href: "/reports", key: "reports", icon: BarChart3Icon },
   { href: "/content", key: "content", icon: CalendarIcon },
   { href: "/data", key: "data", icon: DatabaseIcon },
   { href: "/knowledge", key: "knowledge", icon: BookOpenIcon },

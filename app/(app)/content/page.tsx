@@ -41,7 +41,8 @@ export default function ContentPage() {
   const createContent = useMutation(api.contentApi.createContentByOwner);
   const createCampaign = useMutation(api.contentApi.createCampaignByOwner);
   const updateCampaign = useMutation(api.contentApi.updateCampaignStatus);
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(Date.now()));
+  const [renderedAt] = useState(() => Date.now());
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(renderedAt));
   const [newOpen, setNewOpen] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [selected, setSelected] = useState<Id<"contentCalendar"> | null>(null);
@@ -149,7 +150,7 @@ export default function ContentPage() {
             <Button size="xs" variant="outline" onClick={() => setWeekStart(weekStart - 7 * DAY)}>
               السابق
             </Button>
-            <Button size="xs" variant="outline" onClick={() => setWeekStart(startOfWeek(Date.now()))}>
+            <Button size="xs" variant="outline" onClick={() => setWeekStart(startOfWeek(renderedAt))}>
               اليوم
             </Button>
             <Button size="xs" variant="outline" onClick={() => setWeekStart(weekStart + 7 * DAY)}>
@@ -160,7 +161,7 @@ export default function ContentPage() {
         <CardContent className="grid gap-2 md:grid-cols-7">
           {days.map((d) => {
             const items = (content ?? []).filter((c) => c.scheduledAt.timestamp >= d && c.scheduledAt.timestamp < d + DAY).sort((a, b) => a.scheduledAt.timestamp - b.scheduledAt.timestamp);
-            const today = Date.now() >= d && Date.now() < d + DAY;
+            const today = renderedAt >= d && renderedAt < d + DAY;
             return (
               <div key={d} className={cn("min-h-28 rounded-md border p-1.5", today && "border-primary")}>
                 <div className="mb-1 text-xs font-medium">{formatDate(d, locale)}</div>

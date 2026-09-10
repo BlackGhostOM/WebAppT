@@ -8,6 +8,7 @@ import { requireUser } from "./lib/actor";
 import { computeFreshness } from "./lib/freshness";
 import { monthKey } from "./lib/settings";
 import { listPending } from "./services/approvals";
+import { dashboardExtras } from "./services/reports";
 import { listActiveTasks } from "./services/tasks";
 import { monthlyUsage } from "./services/usage";
 
@@ -40,10 +41,12 @@ export const overview = query({
 
     const notifications = await ctx.db.query("notifications").withIndex("by_unread", (q) => q.eq("readAt", undefined)).order("desc").take(10);
     const emergency = (await ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", "emergencyStop")).unique())?.value as { active?: boolean } | undefined;
+    const extras = await dashboardExtras(ctx);
 
     return {
       kpis,
       usage,
+      ...extras,
       activeTasks: activeTasks.sort((a, b) => b._creationTime - a._creationTime).slice(0, 12),
       pendingApprovals,
       pendingCount,
