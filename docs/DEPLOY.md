@@ -13,8 +13,9 @@ npx convex login                      # مرة واحدة
 npx convex dev --configure new        # يربط المشروع بفريقك ويكتب CONVEX_DEPLOYMENT في .env.local (نشر dev سحابي)
 npx convex deploy                     # ينشئ/يحدّث نشر الإنتاج prod ويرفع الدوال والمخطط وcron
 ```
-- من لوحة Convex → Settings → **Deploy Key**: أنشئ مفتاح نشر للإنتاج (`CONVEX_DEPLOY_KEY`) وستحتاجه في Vercel.
+- من لوحة Convex → Settings → **Deploy Key**: أنشئ مفتاح نشر (`CONVEX_DEPLOY_KEY`). مفتاح `prod:` يوجّه إلى نشر الإنتاج، ومفتاح `dev:` إلى نشر التطوير السحابي. بوجود المفتاح في `.env.local` أو البيئة تعمل كل أوامر `npx convex …` (deploy, env set, run) على ذلك النشر دون تسجيل دخول تفاعلي.
 - عنوانان مهمان من لوحة النشر: `https://<slug>.convex.cloud` (العميل) و`https://<slug>.convex.site` (نقاط HTTP: Webhook إنستجرام ونموذج الموقع).
+- الحالة الحالية للشركة: النشر السحابي `quiet-hyena-590` (مفتاح `dev:`) هو المستخدم كإنتاج مؤقتاً؛ عند إنشاء نشر `prod` في لوحة Convex كرّر الخطوات 2 و4 عليه وبدّل المفتاح.
 
 ## 2. متغيرات بيئة Convex (الإنتاج)
 تُضبط من اللوحة (Settings → Environment Variables) أو بالأمر `npx convex env set NAME=VALUE --prod`.
@@ -40,13 +41,15 @@ npx convex env remove OWNER_PASSWORD --prod
 ```
 
 ## 3. مشروع Vercel
-1. Import المستودع في Vercel (Framework: Next.js). ملف `vercel.json` يضبط أمر البناء: `npx convex deploy --cmd 'npm run build'` — أي كل نشر على Vercel ينشر دوال Convex أولاً ثم يبني الواجهة بعنوان النشر الصحيح.
+1. ادفع الكود إلى GitHub ثم Import المستودع في Vercel (Framework: Next.js). أمر البناء في `vercel.json` هو `node scripts/vercel-build.mjs`:
+   - إن وُجد `CONVEX_DEPLOY_KEY` في بيئة Vercel → ينشر دوال Convex أولاً ثم يبني الواجهة بعنوان النشر الصحيح في خطوة واحدة (الموصى به للإنتاج).
+   - إن لم يوجد → يبني الواجهة فقط بالعناوين الافتراضية في `next.config.ts` (نشر الشركة السحابي)، وتُنشر دوال Convex يدوياً بـ`npx convex deploy` من جهاز يحمل المفتاح.
 2. متغيرات بيئة Vercel (Production):
 
 | المتغير | القيمة |
 |---|---|
-| `CONVEX_DEPLOY_KEY` | مفتاح النشر من الخطوة 1 (Sensitive) |
-| `NEXT_PUBLIC_CONVEX_URL` | `https://<slug>.convex.cloud` (يكتبه `convex deploy` تلقائياً أثناء البناء؛ ضعه احتياطاً) |
+| `CONVEX_DEPLOY_KEY` | مفتاح النشر من الخطوة 1 (Sensitive) — يفعّل النشر الموحّد |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://<slug>.convex.cloud` (اختياري إن كان الافتراضي في `next.config.ts` صحيحاً) |
 | `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://<slug>.convex.site` — تستخدمه صفحة `/contact` ويُعرض في صندوق العملاء كعنوان الـWebhook |
 
 3. Deploy. الرؤوس الأمنية (nosniff, DENY, Referrer-Policy, Permissions-Policy) مضبوطة في `vercel.json`، والمنطقة `fra1` (الأقرب لعُمان بين مناطق Vercel).
