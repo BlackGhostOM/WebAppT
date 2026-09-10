@@ -13,6 +13,7 @@ import { appError } from "./lib/errors";
 import { getSetting } from "./lib/settings";
 import { decideApproval, listPending, markExecuted } from "./services/approvals";
 import { confirmBookingService, type EvidenceInput } from "./services/commercial";
+import { markFollowUpSkipped } from "./services/followUps";
 import { updateRecord } from "./services/records";
 import { deliverApprovedMessage, markQuoteSent } from "./services/sales";
 
@@ -79,6 +80,9 @@ async function applyRejectionSideEffects(ctx: Parameters<typeof decideApproval>[
   if (approval.kind === "SEND_CUSTOMER_MESSAGE" && payload.interactionId) {
     const interaction = await ctx.db.get(payload.interactionId as Id<"interactions">);
     if (interaction) await ctx.db.patch(interaction._id, { status: "CLASSIFIED", updatedAt: Date.now() });
+  }
+  if (approval.kind === "SEND_CUSTOMER_MESSAGE" && payload.followUpId) {
+    await markFollowUpSkipped(ctx, payload.followUpId as Id<"followUps">, approval.decisionReason ?? "rejected_by_owner");
   }
 }
 

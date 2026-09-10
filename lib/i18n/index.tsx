@@ -169,6 +169,22 @@ export const VOCAB_AR: Record<string, string> = {
   PENDING_APPROVAL: "بانتظار الاعتماد",
   SCHEDULED: "مجدول",
   PUBLISHED: "منشور",
+  // channels (rest)
+  WALK_IN: "زيارة مباشرة",
+  REFERRAL: "إحالة",
+  // follow-ups
+  WELCOME: "رسالة ترحيب",
+  PRE_TRIP_REMINDER: "تذكير قبل الرحلة",
+  SATISFACTION_SURVEY: "استطلاع الرضا",
+  SENT: "أُرسلت",
+  SKIPPED: "تُخطّيت",
+  // delivery
+  MOCK: "محاكاة (سُجّلت فقط)",
+  NOT_CONNECTED: "القناة غير مربوطة — سُجّلت فقط",
+  // consent
+  GRANTED: "موافقة ممنوحة",
+  NOT_GRANTED: "بلا موافقة",
+  WITHDRAWN: "موافقة مسحوبة",
 };
 
 export function labelOf(value: string | undefined | null, locale: Locale = "ar"): string {

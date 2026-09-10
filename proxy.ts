@@ -6,9 +6,12 @@
 import { convexAuthNextjsMiddleware, createRouteMatcher, nextjsMiddlewareRedirect } from "@convex-dev/auth/nextjs/server";
 
 const isPublicRoute = createRouteMatcher(["/login", "/reset-password"]);
+// Website-facing pages: reachable by anyone, never redirect signed-in users away.
+const isPublicSitePage = createRouteMatcher(["/contact"]);
 
 export default convexAuthNextjsMiddleware(
   async (request, { convexAuth }) => {
+    if (isPublicSitePage(request)) return;
     const authenticated = await convexAuth.isAuthenticated();
     if (isPublicRoute(request)) {
       if (authenticated) return nextjsMiddlewareRedirect(request, "/dashboard");

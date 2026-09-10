@@ -18,3 +18,8 @@ npm run seed                         # بيانات اصطناعية عُمان�
 npm run dev                          # http://localhost:3000
 ```
 بدون `ANTHROPIC_API_KEY` يعمل النظام في وضع محاكاة صريح لا يخترع بيانات.
+
+## قنوات العملاء (المرحلة 3)
+- **إنستجرام**: اضبط في لوحة Meta عنوان الـWebhook `https://<deployment>.convex.site/webhooks/instagram` مع `META_WEBHOOK_VERIFY_TOKEN`، وأضف `META_APP_SECRET` و`META_PAGE_ACCESS_TOKEN` إلى بيئة Convex، ثم بدّل «وضع إنستجرام حي» من الإعدادات. قبل ذلك يعمل وضع المحاكاة (زر «محاكاة رسالة واردة» في صندوق العملاء).
+- **نموذج الموقع**: صفحة `/contact` جاهزة، أو أرسل `POST https://<deployment>.convex.site/api/contact` بحقول `name, phone|email, message, subject?, language?` من موقع الشركة.
+- كل رسالة تصل إلى صندوق موحد، يصنّفها وكيل خدمة العملاء ويقترح رداً يعتمده المالك بنقرة؛ الشكاوى تُصعَّد فوراً.

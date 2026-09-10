@@ -29,3 +29,4 @@
 |---|---|---|
 | 1.0 | 2026-09-10 | المخطط الأولي: 12 نطاقاً، جداول MVP، المعرفة والذاكرة، وقت التشغيل للوكلاء |
 | 1.1 | 2026-09-11 | إضافة متوافقة: `usageLog.webSearchRequests` (اختياري) لمحاسبة البحث الخادمي؛ مفردات تسلسل المحتوى والحملات (`CONTENT_TRANSITIONS`, `CAMPAIGN_TRANSITIONS`) دون تغيير القيم |
+| 1.2 | 2026-09-11 | إضافة متوافقة (المرحلة 3): جداول `channelIdentities` (هوية القناة ↔ العميل)، `followUps` (متابعات ما بعد البيع)، `httpRateLimits`؛ حقول اختيارية `tasks.escalationReason/escalationOf/interactionId`، `interactions.deliveryStatus/deliveryError`؛ مفردات `FOLLOW_UP_KINDS`, `FOLLOW_UP_STATUSES`؛ بادئة معرّف `FUP` |

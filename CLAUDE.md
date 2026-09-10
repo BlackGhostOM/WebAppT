@@ -25,7 +25,9 @@ app/                      Next.js routes. (auth)/login, (auth)/reset-password ar
 components/               UI (shadcn in components/ui — Base UI primitives, not Radix), app-shell, badges, data forms
 lib/                      Shared pure code: modelRouting.ts (routing policy), entities.ts (form/data dictionary), i18n/, format.ts
 convex/
-  schema.ts               12 domains; MVP tables implemented, the rest documented as // Phase 2+
+  schema.ts               12 domains; MVP tables implemented (1.2: channelIdentities, followUps), the rest as // Phase 2+
+  inbound/                http.ts (webhook + contact form), pipeline.ts (internal receive), delivery.ts (Graph API send)
+  inbox.ts / followUps.ts owner-facing unified inbox API and post-sale follow-ups API
   lib/vocab.ts            Controlled vocabulary (as const) — the ONLY place statuses/types live
   lib/baseFields.ts       Shared provenance/trust/validity/version fields + money & citation validators
   lib/ids.ts              businessId generator (counters table)
@@ -76,7 +78,19 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
 ## Runtime modes
 - No `ANTHROPIC_API_KEY` → `mock` LLM provider (deterministic; never invents business data) and hashed mock embeddings.
 - No `AUTH_RESEND_KEY` → password-reset codes are printed in Convex logs.
-- Instagram/WhatsApp: mock mode until Phase 3 integrations are connected (Settings → Integrations).
+- Instagram: `integrations.instagramMode` = `mock` (default; inbox "simulate" button, unsigned webhooks accepted when
+  META_APP_SECRET is unset, outbound logged only) or `live` (webhook signature enforced, replies sent via Graph API
+  with META_PAGE_ACCESS_TOKEN). WhatsApp: not connected (outbound logged with deliveryStatus NOT_CONNECTED).
+
+## Inbound channels (Phase 3)
+- HTTP (convex/http.ts → convex/inbound/http.ts): `GET/POST /webhooks/instagram`, `POST /api/contact` (10/min per IP,
+  honeypot field `website`). Both call `services/inbox.ts::receiveInbound` → customer match (channelIdentities → phone/email
+  → minimal new customer) → `interactions` (NEW) → one support task per message (origin `customer`, Haiku).
+- `propose_reply` runs `shouldEscalate` (complaint / confidence < 0.7 / booking > 2000 OMR) → second task with
+  `escalationReason` on the escalation model, once. Complaints also create an URGENT executive task. FAQ auto-reply only when
+  `autoApprove.faqAutoReply` + INQUIRY + `faq=true` + confidence ≥ threshold + no price text + reply window open.
+- Post-sale follow-ups: `services/followUps.ts` (cron 04:00 UTC, `followUps.runNow` for the owner) → approvals → sent.
+- Public page `/contact` (proxy.ts allows it) posts to `NEXT_PUBLIC_CONVEX_SITE_URL/api/contact`.
 
 ## Phase status
 - Phase 1 (backbone): done.
@@ -85,5 +99,8 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   approval), sales tools (quotes from ACTIVE products only, follow-up proposals, campaigns, content calendar,
   pipeline report). Owner UI: packages (research-rate confirmation, components, itinerary), pipeline (lead dialog,
   quotes, messages), content calendar (campaigns, week grid, owner actions). Services: `services/sales.ts`, `services/reports.ts`.
-- Phase 3: support agent inbox, website form, Instagram webhook (mock first).
-- Phase 4: reports, scheduled follow-ups, auto-approval rules, Vercel/Convex deployment guide (docs/DEPLOY.md).
+- Phase 3 (support agent): done — unified inbox intake (Instagram webhook with mock mode, website contact form, owner
+  simulator), customer matching via channel identities, per-message support tasks with one-shot model escalation and
+  executive escalation for complaints, FAQ auto-reply gate, owner one-click approve/edit/reject + direct reply, live
+  Instagram delivery action, post-sale follow-ups (welcome/reminder/survey) via cron + approvals. Schema 1.2.
+- Phase 4: reports, auto-approval rules UI, WhatsApp connection, Vercel/Convex deployment guide (docs/DEPLOY.md).

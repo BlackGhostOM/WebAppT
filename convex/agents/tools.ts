@@ -28,6 +28,7 @@ import { keywordSearch, recordCitations, recordKnowledgeGap } from "../services/
 import { createRecord, getRecord, listRecords, updateRecord } from "../services/records";
 import { computeKpis, pipelineReport } from "../services/reports";
 import { createCampaign, proposeFollowUp, scheduleContent } from "../services/sales";
+import { proposeReply } from "../services/support";
 import { createTask, listActiveTasks } from "../services/tasks";
 
 export { computeKpis } from "../services/reports";
@@ -101,7 +102,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   { name: "record_knowledge_gap", kind: "write_internal", severity: "D1", requiresApproval: false, allowedAgents: ALL, description: "يسجّل سؤالاً لم تتوفر له إجابة في قاعدة المعرفة.", inputSchema: obj({ question: str("السؤال") }, ["question"]) },
   { name: "record_data_conflict", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ALL, description: "يسجّل تعارض مصدرين حول قيمة واحدة بدل اختيار أحدهما. يطبّق النظام ترتيب الحسم أو يصعّد للمالك.", inputSchema: obj({ table: str("الجدول"), recordId: str("معرّف السجل (اختياري)"), field: str("الحقل"), candidates: arr(obj({ value: str("القيمة"), sourceKind: enumOf(V.SOURCE_KINDS, "نوع المصدر"), sourceRef: str("مرجع/رابط المصدر"), trustLevel: enumOf(V.TRUST_LEVELS, "مستوى الثقة"), observedAt: str("ISO"), contractual: { type: "boolean", description: "تعاقدي؟" } }, ["value", "sourceKind", "trustLevel"]), "المرشحان أو أكثر") }, ["table", "field", "candidates"]) },
   { name: "schedule_content", kind: "write_internal", severity: "D2", requiresApproval: false, approvalKind: "PUBLISH_CONTENT", allowedAgents: ["sales"], description: "يضيف منشوراً إلى تقويم النشر بحالة بانتظار الاعتماد وينشئ طلب اعتماد للنشر.", inputSchema: obj({ platform: enumOf(V.CONTENT_PLATFORMS, "المنصة"), caption: str("النص"), captionEn: str("النص بالإنجليزية (اختياري)"), hashtags: arr(str("#هاشتاق"), "الهاشتاقات"), visualIdea: str("الفكرة المرئية"), scheduledAt: str("وقت النشر ISO"), productId: str("معرّف المنتج (اختياري)"), campaignId: str("معرّف الحملة (اختياري)") }, ["platform", "caption", "scheduledAt"]) },
-  { name: "propose_reply", kind: "write_internal", severity: "D2", requiresApproval: false, approvalKind: "SEND_CUSTOMER_MESSAGE", allowedAgents: ["support"], description: "يصنّف رسالة واردة ويقترح رداً يُعرض على المالك للاعتماد بنقرة.", inputSchema: obj({ interactionId: str("معرّف الرسالة"), kind: enumOf(V.INTERACTION_KINDS, "التصنيف"), confidence: num("ثقة التصنيف 0-1"), reply: str("الرد المقترح بلغة العميل") }, ["interactionId", "kind", "confidence", "reply"]) },
+  { name: "propose_reply", kind: "write_internal", severity: "D2", requiresApproval: false, approvalKind: "SEND_CUSTOMER_MESSAGE", allowedAgents: ["support"], description: "يصنّف رسالة واردة ويقترح رداً يُعرض على المالك للاعتماد بنقرة. الشكاوى وانخفاض الثقة والحجوزات الكبيرة تُعاد معالجتها تلقائياً بنموذج أدق مرة واحدة. استدعِه مرة واحدة لكل رسالة.", inputSchema: obj({ interactionId: str("معرّف الرسالة"), kind: enumOf(V.INTERACTION_KINDS, "التصنيف"), confidence: num("ثقة التصنيف 0-1"), reply: str("الرد المقترح بلغة العميل، دون أسعار غير موجودة في منتج فعّال أو حجز فعلي"), faq: { type: "boolean", description: "true فقط إذا كان الرد مبنياً بالكامل على معرفة معتمدة (search_knowledge) أو منتج فعّال ولا يتضمن سعراً أو تأكيد حجز؛ يؤهّل للرد التلقائي إن فعّله المالك" }, estimatedBookingValueOmr: num("القيمة التقديرية لطلب الحجز بالريال العُماني إن كانت الرسالة طلب حجز (اختياري)") }, ["interactionId", "kind", "confidence", "reply"]) },
   // -------------------------------------------------------------- external
   { name: "send_customer_message", kind: "external", severity: "D3", requiresApproval: true, approvalKind: "SEND_CUSTOMER_MESSAGE", allowedAgents: ["sales", "support"], description: "إرسال رسالة لعميل عبر قناة. لا تُرسل مباشرة؛ تُنشئ طلب اعتماد بمعاينة كاملة.", inputSchema: obj({ customerId: str("معرّف العميل"), channel: enumOf(V.CHANNELS, "القناة"), message: str("نص الرسالة"), purpose: str("الغرض: ترحيب/تذكير/متابعة/استطلاع/رد") }, ["customerId", "channel", "message", "purpose"]) },
   { name: "send_quote", kind: "external", severity: "D3", requiresApproval: true, approvalKind: "SEND_QUOTE", allowedAgents: ["sales"], description: "إرسال عرض سعر لعميل محتمل. يُنشئ طلب اعتماد يتضمن العرض وتحذيرات الأسعار.", inputSchema: obj({ quoteId: str("معرّف العرض"), channel: enumOf(V.CHANNELS, "القناة"), message: str("رسالة مصاحبة") }, ["quoteId", "channel", "message"]) },
@@ -618,35 +619,15 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
       case "propose_reply": {
         const interactionId = id(ctx, "interactions", s(input, "interactionId"));
         if (!interactionId) return { content: "interactionId غير صالح", isError: true };
-        const interaction = await ctx.db.get(interactionId);
-        if (!interaction) return { content: "الرسالة غير موجودة", isError: true };
-        if (agent.slug === "support" && (!interaction.customerId || !refs.customerIds.includes(interaction.customerId))) return { content: "الرسالة خارج نطاق مهمتك", isError: true };
-        const kind = s(input, "kind");
-        if (!V.isOneOf(V.INTERACTION_KINDS, kind)) return { content: "kind غير معياري", isError: true };
-        const reply = s(input, "reply") ?? "";
-        const confidence = n(input, "confidence") ?? 0;
-        await ctx.db.patch(interactionId, {
-          kind,
-          status: "REPLY_PROPOSED",
-          proposedReply: reply,
-          aiClassification: { kind, confidence, model: task.model ?? "unknown", escalated: kind === "COMPLAINT", escalationReason: kind === "COMPLAINT" ? "complaint" : undefined },
-          taskId: task._id,
-          updatedAt: Date.now(),
+        const outcome = await proposeReply(ctx, task, agent, {
+          interactionId,
+          kind: s(input, "kind"),
+          confidence: n(input, "confidence"),
+          reply: s(input, "reply") ?? "",
+          faq: input.faq === true,
+          estimatedBookingValueOmr: n(input, "estimatedBookingValueOmr"),
         });
-        const { approvalId } = await createApproval(ctx, actor, {
-          kind: "SEND_CUSTOMER_MESSAGE",
-          agentSlug: agent.slug,
-          taskId: task._id,
-          title: `رد مقترح على ${interaction.channel}`,
-          summary: `تصنيف: ${kind} (ثقة ${confidence}). الرسالة الأصلية: ${interaction.body.slice(0, 200)}`,
-          payload: { interactionId, customerId: interaction.customerId, channel: interaction.channel, message: reply, purpose: "reply", classification: kind, confidence },
-          toolName: "propose_reply",
-          targetTable: "interactions",
-          targetRecordId: interactionId,
-          severity: kind === "COMPLAINT" ? "D4" : "D3",
-        });
-        await ctx.db.patch(interactionId, { approvalId });
-        return { content: `صُنّفت الرسالة ${kind} واقتُرح رد بانتظار اعتماد المالك.`, approvalId };
+        return { content: outcome.content, isError: outcome.isError, approvalId: outcome.approvalId };
       }
       // -------------------------------------------------------------- external
       case "send_customer_message": {

@@ -61,6 +61,35 @@ function nextId() {
   return `mock_tool_${counter}`;
 }
 
+const COMPLAINT_WORDS = /سيئ|شكو|استرداد|غضب|أسوأ|تأخر|خدع|كذب|complain|refund|terrible|awful|worst|angry|late/i;
+const BOOKING_WORDS = /حجز|أحجز|نحجز|book|reserv/i;
+
+/**
+ * Deterministic stand-in for the support agent: the inbound message is quoted
+ * in the task request between <<< and >>> together with its interaction id.
+ */
+function mockSupportReply(script: string, toolNames: string[]): Record<string, unknown> | null {
+  if (!toolNames.includes("propose_reply")) return null;
+  const id = /معرّف الرسالة: (\S+)/.exec(script)?.[1];
+  const body = /<<<\n([\s\S]*?)\n>>>/.exec(script)?.[1] ?? "";
+  if (!id || !body) return null;
+  const english = (body.match(/[A-Za-z]/g) ?? []).length > (body.match(/[؀-ۿ]/g) ?? []).length;
+  const kind = COMPLAINT_WORDS.test(body) ? "COMPLAINT" : BOOKING_WORDS.test(body) ? "BOOKING_REQUEST" : "INQUIRY";
+  const reply =
+    kind === "COMPLAINT"
+      ? english
+        ? "(simulation) We are truly sorry for your experience. A member of our team will contact you personally today to look into what happened."
+        : "(وضع المحاكاة) نعتذر بصدق عمّا واجهتموه. سيتواصل معكم أحد مسؤولينا شخصياً اليوم للاطلاع على ما حدث ومعالجته."
+      : kind === "BOOKING_REQUEST"
+        ? english
+          ? "(simulation) Thank you for your interest! To prepare the right option, could you share your preferred dates and the number of travellers?"
+          : "(وضع المحاكاة) شكراً لاهتمامكم! لنُعدّ الخيار المناسب، هل تشاركوننا التواريخ المفضلة وعدد المسافرين؟"
+        : english
+          ? "(simulation) Thank you for reaching out. We have received your message and our team will get back to you with the details shortly."
+          : "(وضع المحاكاة) شكراً لتواصلكم معنا. استلمنا رسالتكم وسيعود إليكم فريقنا بالتفاصيل قريباً.";
+  return { interactionId: id, kind, confidence: kind === "INQUIRY" ? 0.9 : 0.85, reply, faq: false };
+}
+
 export function createMockProvider(): LLMProvider {
   return {
     name: "mock",
@@ -122,6 +151,13 @@ export function createMockProvider(): LLMProvider {
       }
       if (content.length > 0) {
         return { content, stopReason: "tool_use", usage, model: "mock", provider: "mock" };
+      }
+
+      // Support tasks: classify by simple keyword rules and propose a neutral acknowledgement
+      // (no prices, no booking confirmation) so the whole inbox → approval flow runs without a key.
+      const supportReply = mockSupportReply(script, request.tools.map((t) => t.name));
+      if (supportReply) {
+        return { content: [{ type: "tool_use", id: nextId(), name: "propose_reply", input: supportReply }], stopReason: "tool_use", usage, model: "mock", provider: "mock" };
       }
 
       const toolNames = request.tools.map((t) => t.name).slice(0, 6).join(", ");

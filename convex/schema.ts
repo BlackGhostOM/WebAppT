@@ -7,7 +7,7 @@
  * future data model. Every enumerated field is constrained to the controlled
  * vocabulary in `./lib/vocab.ts`.
  *
- * Schema version: 1.1 (see docs/DATA_CHANGE_PROCESS.md).
+ * Schema version: 1.2 (see docs/DATA_CHANGE_PROCESS.md).
  */
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
@@ -66,6 +66,9 @@ export default defineSchema({
   // Platform: counters, settings, reference data
   // =========================================================================
   counters: defineTable({ key: v.string(), value: v.number() }).index("by_key", ["key"]),
+
+  /** Fixed-window rate limits for public HTTP endpoints (contact form, webhooks). */
+  httpRateLimits: defineTable({ key: v.string(), windowStart: v.number(), count: v.number() }).index("by_key", ["key"]),
 
   /** Key/value settings editable from the UI without redeploying (model routing, budgets, company…). */
   settings: defineTable({
@@ -153,6 +156,18 @@ export default defineSchema({
     .index("by_normalizedEmail", ["normalizedEmail"])
     .index("by_normalizedName", ["normalizedName"])
     .index("by_status", ["status"]),
+
+  /** Links a channel identity (Instagram sender id, WhatsApp number…) to a customer (schema 1.2). */
+  channelIdentities: defineTable({
+    channel: literals(V.CHANNELS),
+    externalId: v.string(),
+    customerId: v.id("customers"),
+    handle: v.optional(v.string()),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+  })
+    .index("by_channel_externalId", ["channel", "externalId"])
+    .index("by_customer", ["customerId"]),
 
   /** Stated vs inferred preferences; inferred ones are never treated as facts. */
   customerPreferences: defineTable({
@@ -257,6 +272,9 @@ export default defineSchema({
     taskId: v.optional(v.id("tasks")),
     receivedAt: v.number(),
     sentAt: v.optional(v.number()),
+    /** Outbound only (schema 1.2): MOCK = logged in mock mode, QUEUED/SENT/FAILED = live channel delivery. */
+    deliveryStatus: v.optional(v.union(v.literal("MOCK"), v.literal("QUEUED"), v.literal("SENT"), v.literal("FAILED"), v.literal("NOT_CONNECTED"))),
+    deliveryError: v.optional(v.string()),
     createdBy: actorValidator,
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -266,7 +284,31 @@ export default defineSchema({
     .index("by_externalId", ["externalId"])
     .index("by_receivedAt", ["receivedAt"]),
 
-  // Phase 2+: followUps { leadId, customerId, dueAt, kind, message, status, approvalId, sentAt }
+  /**
+   * Post-sale follow-ups (schema 1.2): welcome, pre-trip reminder, satisfaction
+   * survey. Scheduled by the daily cron from confirmed bookings, sent only
+   * after the owner approves the generated message.
+   */
+  followUps: defineTable({
+    businessId: v.string(),
+    bookingId: v.id("bookings"),
+    customerId: v.id("customers"),
+    kind: literals(V.FOLLOW_UP_KINDS),
+    status: literals(V.FOLLOW_UP_STATUSES),
+    dueAt: v.number(),
+    channel: literals(V.CHANNELS),
+    language: literals(V.LANGUAGES),
+    message: v.optional(v.string()),
+    approvalId: v.optional(v.id("approvals")),
+    interactionId: v.optional(v.id("interactions")),
+    sentAt: v.optional(v.number()),
+    skipReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_booking_kind", ["bookingId", "kind"])
+    .index("by_status_dueAt", ["status", "dueAt"])
+    .index("by_customer", ["customerId"]),
 
   // =========================================================================
   // Domain 3 — Tourism Product (owner now: product → future agent 02)
@@ -766,6 +808,11 @@ export default defineSchema({
     schedulerJobId: v.optional(v.id("_scheduled_functions")),
     /** Owner explicitly allowed a premium model for this task (still gated by settings). */
     premiumRequested: v.optional(v.boolean()),
+    /** Set when this task re-processes a customer interaction on the escalation model (section 2.1). */
+    escalationReason: v.optional(v.string()),
+    escalationOf: v.optional(v.id("tasks")),
+    /** Interaction that triggered a customer-originated task. */
+    interactionId: v.optional(v.id("interactions")),
     /** Provider-agnostic message transcript so a task can pause (approvals, subtasks) and resume. */
     transcript: v.optional(v.any()),
   })

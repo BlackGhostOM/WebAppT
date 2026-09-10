@@ -34,6 +34,12 @@
 | `interactions.direction` | INBOUND · OUTBOUND · INTERNAL_NOTE |
 | `interactions.kind` | INQUIRY · BOOKING_REQUEST · COMPLAINT · FOLLOW_UP · FEEDBACK · OTHER |
 | `interactions.status` | NEW · CLASSIFIED · REPLY_PROPOSED · REPLY_APPROVED · REPLIED · ESCALATED · CLOSED |
+| `interactions.deliveryStatus` (الصادر) | MOCK · QUEUED · SENT · FAILED · NOT_CONNECTED |
+| `followUps.kind` | WELCOME · PRE_TRIP_REMINDER · SATISFACTION_SURVEY |
+| `followUps.status` | SCHEDULED → PENDING_APPROVAL → SENT · SKIPPED · CANCELLED |
+
+### قاعدة تصعيد رسائل العملاء (`shouldEscalate`)
+تُعاد معالجة الرسالة مرة واحدة على `escalationModel` إذا: التصنيف COMPLAINT، أو الثقة < `escalation.confidenceThreshold`، أو قيمة الحجز المقدّرة > `escalation.bookingValueThresholdOmr`. الشكوى تُبلغ الوكيل التنفيذي فوراً. الرد التلقائي (FAQ) يتطلب `autoApprove.faqAutoReply` + INQUIRY + `faq=true` + ثقة ≥ العتبة + لا سعر في الرد + نافذة الرد مفتوحة.
 
 ### تسلسل مراحل العميل المحتمل (`LEAD_TRANSITIONS`)
 NEW_LEAD→{QUALIFIED,LOST} · QUALIFIED→{REQUIREMENTS_COLLECTED,PROPOSAL_PREPARED,QUOTE_SENT,LOST} · REQUIREMENTS_COLLECTED→{PROPOSAL_PREPARED,QUOTE_SENT,LOST} · PROPOSAL_PREPARED→{QUOTE_SENT,REQUIREMENTS_COLLECTED,LOST} · QUOTE_SENT→{NEGOTIATION,WON,LOST} · NEGOTIATION→{QUOTE_SENT,WON,LOST} · WON→{} · LOST→{NEW_LEAD}

@@ -104,6 +104,11 @@ export const INTERACTION_KINDS = ["INQUIRY", "BOOKING_REQUEST", "COMPLAINT", "FO
 
 export const INTERACTION_STATUSES = ["NEW", "CLASSIFIED", "REPLY_PROPOSED", "REPLY_APPROVED", "REPLIED", "ESCALATED", "CLOSED"] as const;
 
+/** Post-sale lifecycle messages (section 3.4); each is sent only after approval. */
+export const FOLLOW_UP_KINDS = ["WELCOME", "PRE_TRIP_REMINDER", "SATISFACTION_SURVEY"] as const;
+
+export const FOLLOW_UP_STATUSES = ["SCHEDULED", "PENDING_APPROVAL", "SENT", "SKIPPED", "CANCELLED"] as const;
+
 // ---------------------------------------------------------------------------
 // Domain 3 — Tourism Product
 // ---------------------------------------------------------------------------
@@ -398,6 +403,8 @@ export type RateTrust = (typeof RATE_TRUSTS)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type ToolKind = (typeof TOOL_KINDS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number];
+export type FollowUpStatus = (typeof FOLLOW_UP_STATUSES)[number];
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 export type SeverityClass = (typeof SEVERITY_CLASSES)[number];

@@ -15,7 +15,12 @@ erDiagram
   products ||--o{ quotes : "built on version"
   customers ||--o{ interactions : exchanges
   leads ||--o{ interactions : about
-  leads ||--o{ followUps_P2 : scheduled
+  customers ||--o{ channelIdentities : "reached via"
+  bookings ||--o{ followUps : "lifecycle messages"
+  customers ||--o{ followUps : receives
+  approvals ||--o| followUps : gates
+  interactions ||--o| tasks : "handled by (support)"
+  tasks ||--o| tasks : "escalationOf"
 
   %% ===== Domain 3: Tourism Product =====
   products ||--o{ productComponents : contains

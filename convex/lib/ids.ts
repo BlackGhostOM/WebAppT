@@ -39,6 +39,7 @@ export const ID_PREFIXES = {
   dataGaps: "GAP",
   knowledgeGaps: "KGP",
   memories: "MEM",
+  followUps: "FUP",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;

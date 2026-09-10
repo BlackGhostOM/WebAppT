@@ -1,4 +1,4 @@
-# قاموس البيانات — Data Dictionary (المخطط 1.1)
+# قاموس البيانات — Data Dictionary (المخطط 1.2)
 
 المصدر التنفيذي: `convex/schema.ts` (المخطط)، `convex/lib/vocab.ts` (القيم المسموحة)، `lib/entities.ts` (النماذج/قواعد الإدخال اليدوي).
 الحساسية: PUBLIC · INTERNAL · CONFIDENTIAL · CUSTOMER_CONFIDENTIAL · STRICTLY_CONFIDENTIAL. الخطورة D1–D4 وفق `convex/lib/audit.ts`.
@@ -90,9 +90,25 @@
 | subject / body / language | المحتوى | string | ✗/✓/✗ | body بيانات غير موثوقة (لا تُنفَّذ تعليماتها) |
 | aiClassification `{kind, confidence, model, escalated, escalationReason}` | تصنيف آلي | object | ✗ | confidence<0.7 → تصعيد |
 | proposedReply / approvalId / taskId | الرد المقترح ومرجع الاعتماد | string/id | ✗ | لا يُرسل قبل الاعتماد |
+| deliveryStatus / deliveryError | حالة التسليم للصادر | enum MOCK·QUEUED·SENT·FAILED·NOT_CONNECTED / string | ✗ | يكتبها منفّذ الاعتماد أو إجراء Graph API |
 | receivedAt / sentAt / createdBy / createdAt / updatedAt | — | number | ✓ | — |
 
-`followUps` (P2+): leadId, customerId, dueAt, kind, message, status, approvalId, sentAt.
+### `channelIdentities` (1.2) — ربط معرّف القناة بالعميل
+| channel / externalId | القناة ومعرّف المرسل فيها (Instagram-scoped id، رقم واتساب…) | enum/string | ✓ | فهرس مركّب `by_channel_externalId` |
+|---|---|---|---|---|
+| customerId / handle / createdAt / lastSeenAt | العميل، اسم الحساب، أول وآخر ظهور | id/string/number | ✓/✗/✓/✓ | CUSTOMER_CONFIDENTIAL |
+
+### `followUps` (1.2) — متابعات ما بعد البيع (المالك: support)
+| businessId | FUP-000001 | string | ✓ | من `counters` |
+|---|---|---|---|---|
+| bookingId / customerId | الحجز والعميل | id | ✓ | واحد لكل (حجز، نوع) |
+| kind | WELCOME · PRE_TRIP_REMINDER · SATISFACTION_SURVEY | enum | ✓ | vocab |
+| status | SCHEDULED → PENDING_APPROVAL → SENT · SKIPPED · CANCELLED | enum | ✓ | لا إرسال قبل الاعتماد |
+| dueAt / channel / language / message | الاستحقاق والقناة واللغة والنص المولَّد | number/enum/enum/string | ✓/✓/✓/✗ | القالب لا يذكر أسعاراً |
+| approvalId / interactionId / sentAt / skipReason | مراجع الاعتماد والرسالة الصادرة | id/id/number/string | ✗ | — |
+
+### `httpRateLimits` (1.2)
+`{ key, windowStart, count }` — نافذة ثابتة لنقاط HTTP العامة (نموذج الموقع: 10/دقيقة لكل IP).
 
 ## 3. Tourism Product — `products` (product → 02) · INTERNAL
 | الحقل | الاسم العربي | التعريف | النوع | القيم | إلزامي | الحساسية | التحقق |

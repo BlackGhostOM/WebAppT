@@ -2,6 +2,7 @@
  * Approval inbox services. Every external action and every D3/D4 change made
  * by an agent is parked here until the owner approves, edits or rejects it.
  */
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Actor } from "../lib/actor";
@@ -57,6 +58,8 @@ export async function createApproval(ctx: MutationCtx, actor: Actor, input: Crea
     approvalId,
     taskId: input.taskId ?? actor.taskId,
   });
+  // An owner-enabled auto-approval executes like a manual approval: same executor, same audit trail.
+  if (autoApproved) await ctx.scheduler.runAfter(0, internal.approvals.execute, { approvalId });
   return { approvalId, autoApproved };
 }
 
@@ -116,6 +119,22 @@ export async function decideApproval(
     }
   }
   return (await ctx.db.get(approvalId))!;
+}
+
+/**
+ * Rule-based approval without the owner (e.g. FAQ auto-reply the owner enabled).
+ * Never used for D4 changes. Execution is scheduled like any approved action.
+ */
+export async function autoApprove(ctx: MutationCtx, approvalId: Id<"approvals">, reason: string) {
+  const approval = await ctx.db.get(approvalId);
+  if (!approval || approval.status !== "PENDING") return false;
+  if (approval.severity === "D4") return false;
+  const now = Date.now();
+  const actor = { type: "system" as const, id: "auto_approve_rule" };
+  await ctx.db.patch(approvalId, { status: "APPROVED", decidedAt: now, decidedBy: actor, decisionReason: reason });
+  await appendAudit(ctx, { actor, table: "approvals", recordId: approvalId, businessId: approval.businessId, event: "APPROVAL", oldValue: { status: "PENDING" }, newValue: { status: "APPROVED", auto: true }, reason, severity: approval.severity, approvalId, taskId: approval.taskId });
+  await ctx.scheduler.runAfter(0, internal.approvals.execute, { approvalId });
+  return true;
 }
 
 export async function markExecuted(ctx: MutationCtx, approvalId: Id<"approvals">, result: unknown, error?: string) {

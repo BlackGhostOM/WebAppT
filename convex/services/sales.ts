@@ -3,6 +3,7 @@
  * messages, campaigns and the content calendar. Anything that reaches a
  * customer or the public is gated by an approval unless the owner does it.
  */
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { assertAccess } from "../lib/access";
@@ -15,6 +16,7 @@ import { assertTransition, requireRef } from "../lib/validation";
 import * as V from "../lib/vocab";
 import { createApproval } from "./approvals";
 import { loadCurrencyRates, stampBase } from "./common";
+import { markFollowUpSent } from "./followUps";
 
 // ---------------------------------------------------------------------------
 // Interactions (unified inbox writes)
@@ -144,7 +146,11 @@ export async function proposeFollowUp(ctx: MutationCtx, actor: Actor, agentSlug:
   return { approvalId, autoApproved };
 }
 
-/** Executes an approved customer/lead message (mock delivery until channels are connected). */
+/**
+ * Executes an approved customer/lead message. Mock mode records the delivery;
+ * live mode hands Instagram messages to the Graph API action (other channels
+ * stay logged-only until they are connected — the result says so explicitly).
+ */
 export async function deliverApprovedMessage(ctx: MutationCtx, actor: Actor, approval: Doc<"approvals">, payload: Record<string, unknown>, mode: "mock" | "live") {
   const channel = (payload.channel as Doc<"interactions">["channel"]) ?? "OTHER";
   const message = String(payload.message ?? "");
@@ -157,6 +163,7 @@ export async function deliverApprovedMessage(ctx: MutationCtx, actor: Actor, app
     direction: "OUTBOUND",
     kind: (payload.classification as Doc<"interactions">["kind"]) ?? "FOLLOW_UP",
     body: message,
+    language: payload.language === "en" ? "en" : payload.language === "ar" ? "ar" : undefined,
     approvalId: approval._id,
     taskId: approval.taskId,
   });
@@ -164,11 +171,28 @@ export async function deliverApprovedMessage(ctx: MutationCtx, actor: Actor, app
     const original = await ctx.db.get(payload.interactionId as Id<"interactions">);
     if (original) await ctx.db.patch(original._id, { status: "REPLIED", sentAt: Date.now(), updatedAt: Date.now() });
   }
+  if (payload.followUpId) await markFollowUpSent(ctx, payload.followUpId as Id<"followUps">, interactionId);
   if (leadId) {
     const lead = await ctx.db.get(leadId);
     if (lead && lead.nextFollowUpAt !== undefined && lead.nextFollowUpAt <= Date.now()) await ctx.db.patch(lead._id, { nextFollowUpAt: undefined });
   }
-  return { delivery: mode === "live" ? "queued_for_channel" : "mock_logged", interactionId, channel };
+
+  let delivery: "mock_logged" | "queued_instagram" | "no_channel_identity" | "channel_not_connected_logged_only" = "mock_logged";
+  if (mode === "live") {
+    if (channel === "INSTAGRAM" && customerId) {
+      const identity = (await ctx.db.query("channelIdentities").withIndex("by_customer", (q) => q.eq("customerId", customerId)).take(10)).find((i) => i.channel === "INSTAGRAM");
+      if (identity) {
+        delivery = "queued_instagram";
+        await ctx.scheduler.runAfter(0, internal.inbound.delivery.sendInstagram, { interactionId, recipientId: identity.externalId, text: message });
+      } else {
+        delivery = "no_channel_identity";
+      }
+    } else {
+      delivery = "channel_not_connected_logged_only";
+    }
+  }
+  await ctx.db.patch(interactionId, { deliveryStatus: delivery === "mock_logged" ? "MOCK" : delivery === "queued_instagram" ? "QUEUED" : "NOT_CONNECTED" });
+  return { delivery, interactionId, channel };
 }
 
 // ---------------------------------------------------------------------------

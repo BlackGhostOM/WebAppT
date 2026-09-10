@@ -92,12 +92,15 @@ export const run = internalAction({
     if (!started) return;
 
     const origin = task.origin === "customer" ? "customer" : agent.slug === "executive" ? "executive" : "owner";
+    // A task created by the escalation rule (section 2.1) runs once on the stronger model.
+    const escalated = task.escalationReason !== undefined;
     const { model, reason: routeReason } = resolveModel({
       origin,
       agentSlug: agent.slug,
       settings: data.settings.modelRouting,
       agentDefaultModel: agent.defaultModel,
       premiumRequested: task.premiumRequested,
+      escalation: escalated,
     });
     const maxSteps = Math.min(agent.maxStepsPerTask || data.settings.runtime.maxStepsPerTask, 30);
     const systemPrompt = `${agent.systemPrompt}\n\n(سياسة النموذج: ${model} — ${routeReason})`;
@@ -157,7 +160,8 @@ export const run = internalAction({
         origin,
         usage: response.usage,
         durationMs: Date.now() - t0,
-        escalated: false,
+        escalated,
+        escalationReason: task.escalationReason,
         stopReason: response.stopReason,
       });
 
