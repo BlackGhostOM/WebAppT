@@ -1,6 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
+import { CheckIcon } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,21 +9,23 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { APPROVAL_KINDS, FOLLOW_UP_KINDS } from "@/convex/lib/vocab";
-import type { ar } from "@/lib/i18n/ar";
 import { AgentBadge, SeverityBadge, StatusBadge, TrustBadge } from "@/components/badges";
 import { CustomSchedulesPanel } from "@/components/settings/custom-schedules";
 import { type EditableUser, UserEditDialog } from "@/components/settings/user-edit-dialog";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatPercent, formatUsd } from "@/lib/format";
 import { labelOf, useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 const asRecord = (value: object): Record<string, unknown> => value as Record<string, unknown>;
 
@@ -31,10 +34,19 @@ function Field({ label, children, hint }: { label: string; children: React.React
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       {children}
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-xs text-hint">{hint}</p>}
     </div>
   );
 }
+
+const SETTINGS_GROUPS = [
+  { group: "agentsGroup", keys: ["agents", "models", "budget"] },
+  { group: "automationGroup", keys: ["autoApprove", "scheduled"] },
+  { group: "companyGroup", keys: ["company", "integrations", "users"] },
+  { group: "dataGroup", keys: ["dataHealth", "governance"] },
+] as const;
+type SettingsTab = (typeof SETTINGS_GROUPS)[number]["keys"][number];
+const ALL_TABS = SETTINGS_GROUPS.flatMap((g) => g.keys) as readonly SettingsTab[];
 
 export default function SettingsPage() {
   const { t, locale } = useT();
@@ -56,36 +68,71 @@ export default function SettingsPage() {
     }
   }
 
+  const current = (ALL_TABS.includes(tab as SettingsTab) ? tab : "agents") as SettingsTab;
   return (
-    <div className="space-y-4">
-      <PageHeader title={t.settings.title} description={!isOwner ? "بعض الإعدادات متاحة للمالك فقط." : undefined} />
-      <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-        <TabsList className="flex-wrap">
-          {(["agents", "models", "budget", "autoApprove", "scheduled", "integrations", "company", "users", "dataHealth", "governance"] as const).map((k) => (
-            <TabsTrigger key={k} value={k}>
-              {t.settings[k]}
-            </TabsTrigger>
+    <div className="space-y-6">
+      <PageHeader title={t.settings.title} description={isOwner ? t.settings.description : t.settings.ownerOnlyNote} />
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr] lg:items-start">
+        <div className="lg:hidden">
+          <Select value={current} onValueChange={(v) => setTab(String(v ?? "agents"))} items={ALL_TABS.map((k) => ({ value: k, label: t.settings[k] }))}>
+            <SelectTrigger className="w-full" aria-label={t.settings.title}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ALL_TABS.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {t.settings[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <nav aria-label={t.settings.title} className="hidden lg:sticky lg:top-20 lg:block">
+          {SETTINGS_GROUPS.map((g) => (
+            <div key={g.group} className="mb-4">
+              <div className="mb-1 px-3 text-xs font-medium text-hint">{t.settingsGroups[g.group]}</div>
+              <ul className="space-y-0.5">
+                {g.keys.map((k) => (
+                  <li key={k}>
+                    <button
+                      type="button"
+                      aria-current={current === k ? "page" : undefined}
+                      onClick={() => setTab(k)}
+                      className={cn(
+                        "flex h-9 w-full items-center rounded-lg px-3 text-start text-sm transition-colors hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none",
+                        current === k ? "bg-primary-soft font-medium text-primary-text" : "text-foreground",
+                      )}
+                    >
+                      {t.settings[k]}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </TabsList>
-        <TabsContent value="agents">
-          <AgentsTab isOwner={!!isOwner} />
-        </TabsContent>
-        <TabsContent value="models">{settings && <ModelsTab routing={asRecord(settings.modelRouting)} escalation={asRecord(settings.escalation)} runtime={asRecord(settings.agentRuntime)} onSave={save} hints={settings.providerHints} />}</TabsContent>
-        <TabsContent value="budget">{settings && <BudgetTab budget={asRecord(settings.budget)} onSave={save} />}</TabsContent>
-        <TabsContent value="autoApprove">{settings && <AutoApproveTab value={settings.autoApprove} onSave={save} />}</TabsContent>
-        <TabsContent value="scheduled">{settings && <ScheduledTab value={settings.scheduledTasks} onSave={save} isOwner={!!isOwner} />}</TabsContent>
-        <TabsContent value="integrations">{settings && <IntegrationsTab value={asRecord(settings.integrations)} hints={settings.providerHints} onSave={save} />}</TabsContent>
-        <TabsContent value="company">{settings && <CompanyTab value={asRecord(settings.company)} onSave={save} />}</TabsContent>
-        <TabsContent value="users">
-          <UsersTab isOwner={!!isOwner} meId={me?._id} />
-        </TabsContent>
-        <TabsContent value="dataHealth">
-          <DataHealthTab />
-        </TabsContent>
-        <TabsContent value="governance">
-          <GovernanceTab />
-        </TabsContent>
-      </Tabs>
+        </nav>
+        <div className="min-w-0 space-y-4">
+          <h2 className="font-heading text-lg font-semibold">{t.settings[current]}</h2>
+          {current === "agents" && <AgentsTab isOwner={!!isOwner} />}
+          {current === "models" && settings && (
+            <ModelsTab
+              routing={asRecord(settings.modelRouting)}
+              escalation={asRecord(settings.escalation)}
+              runtime={asRecord(settings.agentRuntime)}
+              onSave={save}
+              hints={settings.providerHints}
+            />
+          )}
+          {current === "budget" && settings && <BudgetTab budget={asRecord(settings.budget)} onSave={save} />}
+          {current === "autoApprove" && settings && <AutoApproveTab value={settings.autoApprove} onSave={save} />}
+          {current === "scheduled" && settings && <ScheduledTab value={settings.scheduledTasks} onSave={save} isOwner={!!isOwner} />}
+          {current === "integrations" && settings && <IntegrationsTab value={asRecord(settings.integrations)} hints={settings.providerHints} onSave={save} />}
+          {current === "company" && settings && <CompanyTab value={asRecord(settings.company)} onSave={save} />}
+          {current === "users" && <UsersTab isOwner={!!isOwner} meId={me?._id} />}
+          {current === "dataHealth" && <DataHealthTab />}
+          {current === "governance" && <GovernanceTab />}
+        </div>
+      </div>
     </div>
   );
 }
@@ -99,7 +146,9 @@ function AgentsTab({ isOwner }: { isOwner: boolean }) {
   const tools = useQuery(api.agentConfig.toolCatalog);
   return (
     <div className="space-y-4">
-      {agents?.map((a) => <AgentCard key={`${a.slug}-${a.promptVersion}`} agent={a} tools={(tools ?? []).filter((tl) => tl.allowedAgents.includes(a.slug))} isOwner={isOwner} />)}
+      {agents?.map((a) => (
+        <AgentCard key={`${a.slug}-${a.promptVersion}`} agent={a} tools={(tools ?? []).filter((tl) => tl.allowedAgents.includes(a.slug))} isOwner={isOwner} />
+      ))}
       {!agents?.length && <EmptyState>لم تُبذر الوكلاء بعد — شغّل npm run seed:owner.</EmptyState>}
     </div>
   );
@@ -109,7 +158,14 @@ function AgentsTab({ isOwner }: { isOwner: boolean }) {
 function AgentCard({ agent: a, tools: agentTools, isOwner }: { agent: AgentRow; tools: ToolRow[]; isOwner: boolean }) {
   const { t } = useT();
   const update = useMutation(api.agentConfig.update);
-  const [d, setD] = useState({ systemPrompt: a.systemPrompt, defaultModel: a.defaultModel, monthlyBudgetUsd: a.monthlyBudgetUsd, maxStepsPerTask: a.maxStepsPerTask, enabled: a.enabled, allowedTools: a.allowedTools });
+  const [d, setD] = useState({
+    systemPrompt: a.systemPrompt,
+    defaultModel: a.defaultModel,
+    monthlyBudgetUsd: a.monthlyBudgetUsd,
+    maxStepsPerTask: a.maxStepsPerTask,
+    enabled: a.enabled,
+    allowedTools: a.allowedTools,
+  });
   return (
     <Card>
       <CardHeader>
@@ -126,24 +182,46 @@ function AgentCard({ agent: a, tools: agentTools, isOwner }: { agent: AgentRow; 
       </CardHeader>
       <CardContent className="space-y-3">
         <Field label={t.settings.systemPrompt}>
-          <Textarea rows={10} value={d.systemPrompt} disabled={!isOwner} onChange={(e) => setD({ ...d, systemPrompt: e.target.value })} className="text-xs leading-relaxed" />
+          <Textarea
+            rows={10}
+            value={d.systemPrompt}
+            disabled={!isOwner}
+            onChange={(e) => setD({ ...d, systemPrompt: e.target.value })}
+            className="text-xs leading-relaxed"
+          />
         </Field>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t.settings.defaultModel}>
             <Input dir="ltr" value={d.defaultModel} disabled={!isOwner} onChange={(e) => setD({ ...d, defaultModel: e.target.value })} />
           </Field>
           <Field label={t.settings.monthlyBudget}>
-            <Input type="number" dir="ltr" value={d.monthlyBudgetUsd} disabled={!isOwner} onChange={(e) => setD({ ...d, monthlyBudgetUsd: Number(e.target.value) })} />
+            <Input
+              type="number"
+              dir="ltr"
+              value={d.monthlyBudgetUsd}
+              disabled={!isOwner}
+              onChange={(e) => setD({ ...d, monthlyBudgetUsd: Number(e.target.value) })}
+            />
           </Field>
           <Field label={t.settings.maxSteps}>
-            <Input type="number" dir="ltr" value={d.maxStepsPerTask} disabled={!isOwner} onChange={(e) => setD({ ...d, maxStepsPerTask: Number(e.target.value) })} />
+            <Input
+              type="number"
+              dir="ltr"
+              value={d.maxStepsPerTask}
+              disabled={!isOwner}
+              onChange={(e) => setD({ ...d, maxStepsPerTask: Number(e.target.value) })}
+            />
           </Field>
         </div>
         <Field label={t.settings.tools}>
           <div className="grid gap-1 rounded-lg border p-2 text-xs sm:grid-cols-2">
             {agentTools.map((tl) => (
               <label key={tl.name} className="flex items-start gap-1.5">
-                <Checkbox checked={d.allowedTools.includes(tl.name)} disabled={!isOwner} onCheckedChange={(v) => setD({ ...d, allowedTools: v ? [...d.allowedTools, tl.name] : d.allowedTools.filter((x) => x !== tl.name) })} />
+                <Checkbox
+                  checked={d.allowedTools.includes(tl.name)}
+                  disabled={!isOwner}
+                  onCheckedChange={(v) => setD({ ...d, allowedTools: v ? [...d.allowedTools, tl.name] : d.allowedTools.filter((x) => x !== tl.name) })}
+                />
                 <span>
                   <span className="font-mono" dir="ltr">
                     {tl.name}
@@ -178,7 +256,19 @@ function AgentCard({ agent: a, tools: agentTools, isOwner }: { agent: AgentRow; 
 // ---------------------------------------------------------------------------
 type SaveFn = (key: string, value: Record<string, unknown>) => Promise<void>;
 
-function ModelsTab({ routing, escalation, runtime, onSave, hints }: { routing: Record<string, unknown>; escalation: Record<string, unknown>; runtime: Record<string, unknown>; onSave: SaveFn; hints: { llmProvider: string; llmProviderConfigured: boolean } }) {
+function ModelsTab({
+  routing,
+  escalation,
+  runtime,
+  onSave,
+  hints,
+}: {
+  routing: Record<string, unknown>;
+  escalation: Record<string, unknown>;
+  runtime: Record<string, unknown>;
+  onSave: SaveFn;
+  hints: { llmProvider: string; llmProviderConfigured: boolean };
+}) {
   const { t } = useT();
   // Drafts start from the saved values; the tab is mounted only once settings are loaded.
   const [r, setR] = useState(routing);
@@ -189,57 +279,80 @@ function ModelsTab({ routing, escalation, runtime, onSave, hints }: { routing: R
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t.settings.models}</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            المزوّد الحالي: <span dir="ltr">{hints.llmProvider}</span> {hints.llmProviderConfigured ? "" : "(وضع المحاكاة — اضبط ANTHROPIC_API_KEY في بيئة Convex)"}. اقتصادي للعملاء، متوسط للمالك؛ النماذج المتقدمة لا تُستخدم افتراضياً.
+          <p className="text-xs leading-5 text-muted-foreground">
+            {t.settings.providerNow}: <span dir="ltr">{hints.llmProvider}</span>
+            {hints.llmProviderConfigured ? "" : ` (${t.settings.mockModeHint})`}. {t.settings.routingHint}
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
           {(["customerModel", "ownerModel", "executiveModel", "escalationModel", "premiumModel"] as const).map((k) => (
-            <Field key={k} label={k}>
-              <Input dir="ltr" value={String(r[k] ?? "")} onChange={(ev) => setR({ ...r, [k]: ev.target.value })} />
+            <Field key={k} label={t.settings.modelLabels[k]}>
+              <Input dir="ltr" className="font-mono" value={String(r[k] ?? "")} onChange={(ev) => setR({ ...r, [k]: ev.target.value })} />
             </Field>
           ))}
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={!!r.allowPremiumModels} onCheckedChange={(v) => setR({ ...r, allowPremiumModels: !!v })} /> السماح بالنماذج المتقدمة لمهمة محددة (خيار «نموذج متقدم» في المحادثة)
+            <Switch checked={!!r.allowPremiumModels} onCheckedChange={(v) => setR({ ...r, allowPremiumModels: !!v })} /> {t.settings.allowPremium}
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={!!r.batchForNonUrgent} onCheckedChange={(v) => setR({ ...r, batchForNonUrgent: !!v })} /> Batch API للمهام غير العاجلة (نصف السعر)
+            <Switch checked={!!r.batchForNonUrgent} onCheckedChange={(v) => setR({ ...r, batchForNonUrgent: !!v })} /> {t.settings.batchNonUrgent}
           </label>
-          <Button size="sm" onClick={() => onSave("modelRouting", r)}>
-            {t.common.save}
-          </Button>
+          <Button onClick={() => onSave("modelRouting", r)}>{t.common.save}</Button>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">التصعيد وحلقة الوكيل</CardTitle>
+          <CardTitle>{t.settings.escalationTitle}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Field label="حد قيمة الحجز للتصعيد (ر.ع)">
-            <Input type="number" dir="ltr" value={Number(e.bookingValueThresholdOmr ?? 0)} onChange={(ev) => setE({ ...e, bookingValueThresholdOmr: Number(ev.target.value) })} />
+          <Field label={t.settings.bookingThreshold}>
+            <Input
+              type="number"
+              dir="ltr"
+              value={Number(e.bookingValueThresholdOmr ?? 0)}
+              onChange={(ev) => setE({ ...e, bookingValueThresholdOmr: Number(ev.target.value) })}
+            />
           </Field>
-          <Field label="حد الثقة للتصعيد (0–1)">
-            <Input type="number" step="0.05" dir="ltr" value={Number(e.confidenceThreshold ?? 0.7)} onChange={(ev) => setE({ ...e, confidenceThreshold: Number(ev.target.value) })} />
+          <Field label={t.settings.confidenceThreshold}>
+            <Input
+              type="number"
+              step="0.05"
+              dir="ltr"
+              value={Number(e.confidenceThreshold ?? 0.7)}
+              onChange={(ev) => setE({ ...e, confidenceThreshold: Number(ev.target.value) })}
+            />
           </Field>
-          <Button size="sm" onClick={() => onSave("escalation", e)}>
-            {t.common.save}
-          </Button>
+          <Button onClick={() => onSave("escalation", e)}>{t.common.save}</Button>
           <div className="border-t pt-3" />
-          <Field label="الحد الأقصى للخطوات لكل مهمة">
-            <Input type="number" dir="ltr" value={Number(rt.maxStepsPerTask ?? 12)} onChange={(ev) => setRt({ ...rt, maxStepsPerTask: Number(ev.target.value) })} />
+          <Field label={t.settings.maxStepsPerTask}>
+            <Input
+              type="number"
+              dir="ltr"
+              value={Number(rt.maxStepsPerTask ?? 12)}
+              onChange={(ev) => setRt({ ...rt, maxStepsPerTask: Number(ev.target.value) })}
+            />
           </Field>
-          <Field label="عمق المهام الفرعية">
-            <Input type="number" dir="ltr" value={Number(rt.maxSubtaskDepth ?? 2)} onChange={(ev) => setRt({ ...rt, maxSubtaskDepth: Number(ev.target.value) })} />
+          <Field label={t.settings.maxSubtaskDepth}>
+            <Input
+              type="number"
+              dir="ltr"
+              value={Number(rt.maxSubtaskDepth ?? 2)}
+              onChange={(ev) => setRt({ ...rt, maxSubtaskDepth: Number(ev.target.value) })}
+            />
           </Field>
-          <Field label="فترة فحص الإيقاف (مللي ثانية)">
+          <Field label={t.settings.cancelPollMs}>
             <Input type="number" dir="ltr" value={Number(rt.cancelPollMs ?? 750)} onChange={(ev) => setRt({ ...rt, cancelPollMs: Number(ev.target.value) })} />
           </Field>
-          <Field label="عمليات البحث على الويب لكل استدعاء (وكيل المنتجات)" hint="كل عملية بحث تكلف 0.01$. بين 1 و20؛ الافتراضي 8.">
-            <Input type="number" dir="ltr" min={1} max={20} value={Number(rt.webSearchMaxUses ?? 8)} onChange={(ev) => setRt({ ...rt, webSearchMaxUses: Number(ev.target.value) })} />
+          <Field label={t.settings.webSearchMaxUses} hint={t.settings.webSearchHint}>
+            <Input
+              type="number"
+              dir="ltr"
+              min={1}
+              max={20}
+              value={Number(rt.webSearchMaxUses ?? 8)}
+              onChange={(ev) => setRt({ ...rt, webSearchMaxUses: Number(ev.target.value) })}
+            />
           </Field>
-          <Button size="sm" onClick={() => onSave("agentRuntime", rt)}>
-            {t.common.save}
-          </Button>
+          <Button onClick={() => onSave("agentRuntime", rt)}>{t.common.save}</Button>
         </CardContent>
       </Card>
     </div>
@@ -257,15 +370,23 @@ function BudgetTab({ budget, onSave }: { budget: Record<string, unknown>; onSave
           <CardTitle className="text-base">{t.settings.budget}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Field label="الميزانية الشهرية ($)">
-            <Input type="number" dir="ltr" value={Number(b.monthlyBudgetUsd ?? 200)} onChange={(e) => setB({ ...b, monthlyBudgetUsd: Number(e.target.value) })} />
+          <Field label={t.settings.monthlyBudgetUsd}>
+            <Input
+              type="number"
+              dir="ltr"
+              value={Number(b.monthlyBudgetUsd ?? 200)}
+              onChange={(e) => setB({ ...b, monthlyBudgetUsd: Number(e.target.value) })}
+            />
           </Field>
-          <Field label="نسبة التنبيه %">
-            <Input type="number" dir="ltr" value={Number(b.alertThresholdPercent ?? 80)} onChange={(e) => setB({ ...b, alertThresholdPercent: Number(e.target.value) })} />
+          <Field label={t.settings.alertThreshold}>
+            <Input
+              type="number"
+              dir="ltr"
+              value={Number(b.alertThresholdPercent ?? 80)}
+              onChange={(e) => setB({ ...b, alertThresholdPercent: Number(e.target.value) })}
+            />
           </Field>
-          <Button size="sm" onClick={() => onSave("budget", b)}>
-            {t.common.save}
-          </Button>
+          <Button onClick={() => onSave("budget", b)}>{t.common.save}</Button>
         </CardContent>
       </Card>
       <Card>
@@ -273,8 +394,11 @@ function BudgetTab({ budget, onSave }: { budget: Record<string, unknown>; onSave
           <CardTitle className="text-base">{usage?.monthKey}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
-          <div>
-            الإجمالي: {formatUsd(usage?.totalUsd)} من {formatUsd(usage?.budgetUsd)} ({formatPercent(usage?.percentOfBudget)})
+          <div className="mb-2 text-base font-semibold tabular-nums">
+            {formatUsd(usage?.totalUsd)}{" "}
+            <span className="text-sm font-normal text-muted-foreground">
+              / {formatUsd(usage?.budgetUsd)} · {formatPercent(usage?.percentOfBudget)}
+            </span>
           </div>
           {usage?.byModel.map((m) => (
             <div key={m.model} className="flex justify-between text-xs" dir="ltr">
@@ -298,12 +422,23 @@ function BudgetTab({ budget, onSave }: { budget: Record<string, unknown>; onSave
   );
 }
 
-type AutoApproveValue = { kinds: string[]; faqAutoReply: boolean; followUpKinds: string[]; maxPerDay: number; quietHours: { enabled: boolean; startHour: number; endHour: number } };
+type AutoApproveValue = {
+  kinds: string[];
+  faqAutoReply: boolean;
+  followUpKinds: string[];
+  maxPerDay: number;
+  quietHours: { enabled: boolean; startHour: number; endHour: number };
+};
 const NEVER_AUTO = ["CONFIRM_BOOKING", "SENSITIVE_CHANGE", "DATA_MERGE"];
 
 function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: SaveFn }) {
   const { t, locale } = useT();
-  const [v, setV] = useState<AutoApproveValue>({ ...value, followUpKinds: value.followUpKinds ?? [], maxPerDay: value.maxPerDay ?? 20, quietHours: value.quietHours ?? { enabled: true, startHour: 22, endHour: 8 } });
+  const [v, setV] = useState<AutoApproveValue>({
+    ...value,
+    followUpKinds: value.followUpKinds ?? [],
+    maxPerDay: value.maxPerDay ?? 20,
+    quietHours: value.quietHours ?? { enabled: true, startHour: 22, endHour: 8 },
+  });
   const log = useQuery(api.settings.autoApprovals, { limit: 30 });
   const hours = Array.from({ length: 24 }, (_, i) => i);
   return (
@@ -318,7 +453,11 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
             <div className="grid gap-1 sm:grid-cols-2">
               {APPROVAL_KINDS.filter((k) => !NEVER_AUTO.includes(k)).map((k) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={v.kinds.includes(k)} onCheckedChange={(c) => setV({ ...v, kinds: c ? [...v.kinds, k] : v.kinds.filter((x) => x !== k) })} /> {labelOf(k, locale)}
+                  <Checkbox
+                    checked={v.kinds.includes(k)}
+                    onCheckedChange={(c) => setV({ ...v, kinds: c ? [...v.kinds, k] : v.kinds.filter((x) => x !== k) })}
+                  />{" "}
+                  {labelOf(k, locale)}
                 </label>
               ))}
             </div>
@@ -327,7 +466,11 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
             <div className="grid gap-1 sm:grid-cols-3">
               {FOLLOW_UP_KINDS.map((k) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={v.followUpKinds.includes(k)} onCheckedChange={(c) => setV({ ...v, followUpKinds: c ? [...v.followUpKinds, k] : v.followUpKinds.filter((x) => x !== k) })} /> {labelOf(k, locale)}
+                  <Checkbox
+                    checked={v.followUpKinds.includes(k)}
+                    onCheckedChange={(c) => setV({ ...v, followUpKinds: c ? [...v.followUpKinds, k] : v.followUpKinds.filter((x) => x !== k) })}
+                  />{" "}
+                  {labelOf(k, locale)}
                 </label>
               ))}
             </div>
@@ -340,7 +483,12 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
               <Input type="number" dir="ltr" min={0} max={500} value={v.maxPerDay} onChange={(e) => setV({ ...v, maxPerDay: Number(e.target.value) })} />
             </Field>
             <Field label={t.settings.quietFrom}>
-              <select className="h-8 rounded-md border bg-background px-2 text-sm" dir="ltr" value={v.quietHours.startHour} onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, startHour: Number(e.target.value) } })}>
+              <select
+                className="h-9 rounded-lg border border-input bg-field px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25"
+                dir="ltr"
+                value={v.quietHours.startHour}
+                onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, startHour: Number(e.target.value) } })}
+              >
                 {hours.map((h) => (
                   <option key={h} value={h}>
                     {String(h).padStart(2, "0")}:00
@@ -349,7 +497,12 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
               </select>
             </Field>
             <Field label={t.settings.quietTo}>
-              <select className="h-8 rounded-md border bg-background px-2 text-sm" dir="ltr" value={v.quietHours.endHour} onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, endHour: Number(e.target.value) } })}>
+              <select
+                className="h-9 rounded-lg border border-input bg-field px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25"
+                dir="ltr"
+                value={v.quietHours.endHour}
+                onChange={(e) => setV({ ...v, quietHours: { ...v.quietHours, endHour: Number(e.target.value) } })}
+              >
                 {hours.map((h) => (
                   <option key={h} value={h}>
                     {String(h).padStart(2, "0")}:00
@@ -359,11 +512,10 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
             </Field>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={v.quietHours.enabled} onCheckedChange={(c) => setV({ ...v, quietHours: { ...v.quietHours, enabled: !!c } })} /> {t.settings.quietHours}
+            <Switch checked={v.quietHours.enabled} onCheckedChange={(c) => setV({ ...v, quietHours: { ...v.quietHours, enabled: !!c } })} />{" "}
+            {t.settings.quietHours}
           </label>
-          <Button size="sm" onClick={() => onSave("autoApprove", v)}>
-            {t.common.save}
-          </Button>
+          <Button onClick={() => onSave("autoApprove", v)}>{t.common.save}</Button>
         </CardContent>
       </Card>
       <Card>
@@ -373,13 +525,17 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
         <CardContent className="space-y-1 text-sm">
           {log?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
           {log?.map((a) => (
-            <Link key={a._id} href={`/approvals?id=${a._id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 hover:bg-muted">
+            <Link
+              key={a._id}
+              href={`/approvals?id=${a._id}`}
+              className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-accent/50"
+            >
               <div className="min-w-0">
                 <div className="truncate font-medium">{a.title}</div>
                 <div className="text-xs text-muted-foreground">
                   {a.businessId} · {formatDate(a.decidedAt, locale, true)} · {a.decisionReason}
                 </div>
-                {a.executionError && <div className="text-xs text-destructive">{a.executionError}</div>}
+                {a.executionError && <div className="text-xs text-destructive-text">{a.executionError}</div>}
               </div>
               <span className="flex items-center gap-1">
                 <AgentBadge slug={a.agentSlug} />
@@ -393,8 +549,19 @@ function AutoApproveTab({ value, onSave }: { value: AutoApproveValue; onSave: Sa
   );
 }
 
-type ScheduledValue = { dailyDigest: boolean; leadFollowUpReminders: boolean; leadRemindersPerDay: number; weeklyExecutiveSummary: boolean; lifecycleFollowUps: boolean };
-const JOB_LABEL: Record<string, keyof typeof ar.settings> = { dailyDigest: "dailyDigest", leadFollowUpReminders: "leadReminders", weeklyExecutiveSummary: "weeklySummary", lifecycleFollowUps: "lifecycleFollowUps" };
+type ScheduledValue = {
+  dailyDigest: boolean;
+  leadFollowUpReminders: boolean;
+  leadRemindersPerDay: number;
+  weeklyExecutiveSummary: boolean;
+  lifecycleFollowUps: boolean;
+};
+const JOB_LABEL: Record<string, "dailyDigest" | "leadReminders" | "weeklySummary" | "lifecycleFollowUps"> = {
+  dailyDigest: "dailyDigest",
+  leadFollowUpReminders: "leadReminders",
+  weeklyExecutiveSummary: "weeklySummary",
+  lifecycleFollowUps: "lifecycleFollowUps",
+};
 
 function ScheduledTab({ value, onSave, isOwner }: { value: ScheduledValue; onSave: SaveFn; isOwner: boolean }) {
   const { t, locale } = useT();
@@ -421,84 +588,117 @@ function ScheduledTab({ value, onSave, isOwner }: { value: ScheduledValue; onSav
   ];
   return (
     <div className="space-y-4">
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t.settings.scheduled}</CardTitle>
-          <p className="text-xs text-muted-foreground">{t.settings.scheduledHint}</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {toggles.map((tg) => (
-            <label key={tg.key} className="flex items-center gap-2 text-sm">
-              <Switch checked={!!v[tg.key]} disabled={!isOwner} onCheckedChange={(c) => setV({ ...v, [tg.key]: !!c })} /> {tg.label}
-            </label>
-          ))}
-          <Field label={t.settings.leadRemindersPerDay}>
-            <Input type="number" dir="ltr" min={0} max={50} value={v.leadRemindersPerDay} disabled={!isOwner} onChange={(e) => setV({ ...v, leadRemindersPerDay: Number(e.target.value) })} />
-          </Field>
-          {isOwner && (
-            <Button size="sm" onClick={() => onSave("scheduledTasks", v)}>
-              {t.common.save}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t.settings.jobs}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {status?.map((s) => (
-            <div key={s.job} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
-              <div className="min-w-0">
-                <div className="font-medium">{t.settings[JOB_LABEL[s.job]]}</div>
-                <div className="text-xs text-muted-foreground">
-                  {s.enabled ? t.settings.enabled : t.settings.disabled} · {t.settings.lastRun}: {s.lastRunAt ? formatDate(s.lastRunAt, locale, true) : t.settings.never}
-                  {s.lastResult && (
-                    <span dir="ltr" className="ms-1 font-mono">
-                      {JSON.stringify(Object.fromEntries(Object.entries(s.lastResult).filter(([k]) => k !== "job" && k !== "manual")))}
-                    </span>
-                  )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t.settings.scheduled}</CardTitle>
+            <p className="text-xs text-muted-foreground">{t.settings.scheduledHint}</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {toggles.map((tg) => (
+              <label key={tg.key} className="flex items-center gap-2 text-sm">
+                <Switch checked={!!v[tg.key]} disabled={!isOwner} onCheckedChange={(c) => setV({ ...v, [tg.key]: !!c })} /> {tg.label}
+              </label>
+            ))}
+            <Field label={t.settings.leadRemindersPerDay}>
+              <Input
+                type="number"
+                dir="ltr"
+                min={0}
+                max={50}
+                value={v.leadRemindersPerDay}
+                disabled={!isOwner}
+                onChange={(e) => setV({ ...v, leadRemindersPerDay: Number(e.target.value) })}
+              />
+            </Field>
+            {isOwner && <Button onClick={() => onSave("scheduledTasks", v)}>{t.common.save}</Button>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t.settings.jobs}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {status?.map((s) => (
+              <div key={s.job} className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                <div className="min-w-0">
+                  <div className="font-medium">{t.settings[JOB_LABEL[s.job]]}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {s.enabled ? t.settings.enabled : t.settings.disabled} · {t.settings.lastRun}:{" "}
+                    {s.lastRunAt ? formatDate(s.lastRunAt, locale, true) : t.settings.never}
+                    {s.lastResult && (
+                      <span dir="ltr" className="ms-1 font-mono">
+                        {JSON.stringify(Object.fromEntries(Object.entries(s.lastResult).filter(([k]) => k !== "job" && k !== "manual")))}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {isOwner && (
+                  <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => run(s.job)}>
+                    {t.settings.runNow}
+                  </Button>
+                )}
               </div>
-              {isOwner && (
-                <Button size="xs" variant="outline" disabled={busy !== null} onClick={() => run(s.job)}>
-                  {t.settings.runNow}
-                </Button>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-    <CustomSchedulesPanel isOwner={isOwner} />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <CustomSchedulesPanel isOwner={isOwner} />
     </div>
   );
 }
 
-function IntegrationsTab({ value, hints, onSave }: { value: Record<string, unknown>; hints: { embeddingsConfigured: boolean; resendConfigured: boolean; llmProvider: string }; onSave: SaveFn }) {
+function IntegrationsTab({
+  value,
+  hints,
+  onSave,
+}: {
+  value: Record<string, unknown>;
+  hints: { embeddingsConfigured: boolean; resendConfigured: boolean; llmProvider: string };
+  onSave: SaveFn;
+}) {
   const { t } = useT();
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{t.settings.integrations}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div>Meta / Instagram: {value.metaConnected ? "متصل" : "غير متصل — وضع المحاكاة (المرحلة 3)"}</div>
-        <div>WhatsApp Business: {value.whatsappConnected ? "متصل" : "غير متصل (المرحلة 2/3)"}</div>
-        <div>
-          Resend (بريد إعادة التعيين): {hints.resendConfigured ? "مضبوط" : "غير مضبوط — الرموز تظهر في سجلات Convex"}
-        </div>
-        <div>Embeddings (Voyage AI): {hints.embeddingsConfigured ? "مضبوط" : "غير مضبوط — تضمين حتمي محلي"}</div>
-        <div>
-          LLM: <span dir="ltr">{hints.llmProvider}</span>
-        </div>
-        <label className="flex items-center gap-2">
-          <Switch checked={value.instagramMode === "live"} onCheckedChange={(c) => onSave("integrations", { instagramMode: c ? "live" : "mock" })} /> وضع إنستجرام حي (يتطلب ربط Meta)
+      <CardContent className="space-y-4 text-sm">
+        <dl className="divide-y">
+          <IntegrationRow label="Meta / Instagram" ok={!!value.metaConnected} okText={t.settings.connected} badText={t.settings.notConnectedMock} />
+          <IntegrationRow label="WhatsApp Business" ok={!!value.whatsappConnected} okText={t.settings.connected} badText={t.settings.notConnected} />
+          <IntegrationRow label={t.settings.resendLabel} ok={hints.resendConfigured} okText={t.settings.configured} badText={t.settings.resendMissing} />
+          <IntegrationRow
+            label={t.settings.embeddingsLabel}
+            ok={hints.embeddingsConfigured}
+            okText={t.settings.configured}
+            badText={t.settings.embeddingsMissing}
+          />
+          <div className="flex items-center justify-between gap-3 py-2">
+            <dt className="text-muted-foreground">LLM</dt>
+            <dd dir="ltr" className="font-mono text-xs">
+              {hints.llmProvider}
+            </dd>
+          </div>
+        </dl>
+        <label className="flex min-h-9 items-center gap-2">
+          <Switch checked={value.instagramMode === "live"} onCheckedChange={(c) => onSave("integrations", { instagramMode: c ? "live" : "mock" })} />{" "}
+          {t.settings.instagramLive}
         </label>
-        <p className="text-xs text-muted-foreground">تُضبط المفاتيح في متغيرات بيئة Convex فقط (انظر .env.example)؛ لا تُخزَّن هنا.</p>
+        <p className="text-xs text-hint">{t.settings.keysNote}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function IntegrationRow({ label, ok, okText, badText }: { label: string; ok: boolean; okText: string; badText: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>
+        <Badge variant={ok ? "success" : "outline"}>{ok ? okText : badText}</Badge>
+      </dd>
+    </div>
   );
 }
 
@@ -513,17 +713,15 @@ function CompanyTab({ value, onSave }: { value: Record<string, unknown>; onSave:
       <CardContent className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           {(["name", "nameEn", "legalEntity", "country", "timezone", "phone", "email", "website", "address"] as const).map((k) => (
-            <Field key={k} label={k}>
+            <Field key={k} label={t.settings.companyFields[k]}>
               <Input dir={k === "name" || k === "address" ? "rtl" : "ltr"} value={String(c[k] ?? "")} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
             </Field>
           ))}
         </div>
-        <Field label="ملخص سياق الشركة (يُحقن في كل استدعاء للوكلاء ويُخزَّن مؤقتاً)">
+        <Field label={t.settings.contextSummary} hint={t.settings.contextSummaryHint}>
           <Textarea rows={4} value={String(c.contextSummary ?? "")} onChange={(e) => setC({ ...c, contextSummary: e.target.value })} />
         </Field>
-        <Button size="sm" onClick={() => onSave("company", c)}>
-          {t.common.save}
-        </Button>
+        <Button onClick={() => onSave("company", c)}>{t.common.save}</Button>
       </CardContent>
     </Card>
   );
@@ -539,7 +737,9 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
   const [form, setForm] = useState({ email: "", password: "", name: "", role: "staff" });
   const [busy, setBusy] = useState(false);
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
-  if (!isOwner) return <EmptyState>إدارة المستخدمين متاحة للمالك فقط.</EmptyState>;
+  const [pwUser, setPwUser] = useState<{ _id: Id<"users">; email?: string } | null>(null);
+  const [pw, setPw] = useState("");
+  if (!isOwner) return <EmptyState>{t.settings.usersOwnerOnly}</EmptyState>;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -548,36 +748,63 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {users?.map((u) => (
-            <div key={u._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
-              <div>
-                <div dir="ltr" className="font-medium">
-                  {u.email}
+            <div key={u._id} className={cn("space-y-3 rounded-xl border border-border p-3", u.disabled && "bg-secondary/40")}>
+              <div className="flex items-start gap-3">
+                <div
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-text"
+                  aria-hidden
+                >
+                  {(u.name ?? u.email ?? "?").slice(0, 1).toUpperCase()}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {u.name ?? ""}{u.phone ? ` · ${u.phone}` : ""} · {u.role === "owner" ? "المالك" : "موظف"} {u.disabled ? `· ${t.settings.disabled}` : ""} · آخر دخول {formatDate(u.lastLoginAt, locale, true)}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{u.name ?? u.email}</span>
+                    <Badge variant={u.role === "owner" ? "info" : "secondary"}>{u.role === "owner" ? t.common.owner : t.common.staff}</Badge>
+                    {u.disabled && <Badge variant="destructive">{t.settings.disabled}</Badge>}
+                    {u._id === meId && <Badge variant="outline">{t.chat.you}</Badge>}
+                  </div>
+                  <div dir="ltr" className="truncate text-start text-xs text-muted-foreground">
+                    {u.email}
+                    {u.phone ? ` · ${u.phone}` : ""}
+                  </div>
+                  <div className="text-xs text-hint">
+                    {t.settings.lastLogin}: {formatDate(u.lastLoginAt, locale, true)}
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1">
-                <Button size="xs" variant="secondary" onClick={() => setEditingUser({ _id: u._id, email: u.email, name: u.name, phone: u.phone, locale: u.locale })}>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingUser({ _id: u._id, email: u.email, name: u.name, phone: u.phone, locale: u.locale })}
+                >
                   {t.settings.editUser}
                 </Button>
-                <Button size="xs" variant="outline" onClick={() => setAccess({ userId: u._id, role: u.role === "owner" ? "staff" : "owner" }).catch((e) => toast.error(e.message))} disabled={u._id === meId}>
-                  {u.role === "owner" ? "→ موظف" : "→ مالك"}
-                </Button>
-                <Button size="xs" variant="outline" onClick={() => setAccess({ userId: u._id, disabled: !u.disabled }).catch((e) => toast.error(e.message))} disabled={u._id === meId}>
-                  {u.disabled ? "تفعيل" : "تعطيل"}
-                </Button>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => {
-                    const p = window.prompt(t.auth.passwordHint);
-                    if (p) changePassword({ userId: u._id, newPassword: p }).then(() => toast.success(t.settings.changePassword)).catch((e) => toast.error(e.message));
-                  }}
-                >
+                <Button size="sm" variant="outline" onClick={() => setPwUser({ _id: u._id, email: u.email })}>
                   {t.settings.changePassword}
                 </Button>
-                <Button size="xs" variant="ghost" onClick={() => signOutEverywhere({ userId: u._id }).then(() => toast.success(t.settings.endSessions))}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAccess({ userId: u._id, role: u.role === "owner" ? "staff" : "owner" }).catch((e) => toast.error(e.message))}
+                  disabled={u._id === meId}
+                >
+                  {u.role === "owner" ? t.settings.makeStaff : t.settings.makeOwner}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAccess({ userId: u._id, disabled: !u.disabled }).catch((e) => toast.error(e.message))}
+                  disabled={u._id === meId}
+                >
+                  {u.disabled ? t.settings.enable : t.settings.disable}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ms-auto text-muted-foreground"
+                  onClick={() => signOutEverywhere({ userId: u._id }).then(() => toast.success(t.settings.endSessions))}
+                >
                   {t.settings.endSessions}
                 </Button>
               </div>
@@ -586,6 +813,37 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
         </CardContent>
       </Card>
       {editingUser && <UserEditDialog key={editingUser._id} user={editingUser} onClose={() => setEditingUser(null)} />}
+      <Dialog open={pwUser !== null} onOpenChange={(o) => !o && setPwUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.settings.changePassword}</DialogTitle>
+            <DialogDescription dir="ltr">{pwUser?.email}</DialogDescription>
+          </DialogHeader>
+          <Field label={t.auth.password} hint={t.auth.passwordHint}>
+            <Input type="password" dir="ltr" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
+          </Field>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPwUser(null)}>
+              {t.common.cancel}
+            </Button>
+            <Button
+              disabled={pw.length < 12 || !pwUser}
+              onClick={() =>
+                pwUser &&
+                changePassword({ userId: pwUser._id, newPassword: pw })
+                  .then(() => {
+                    toast.success(t.settings.changePassword);
+                    setPwUser(null);
+                    setPw("");
+                  })
+                  .catch((e) => toast.error(e.message))
+              }
+            >
+              {t.common.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t.settings.addUser}</CardTitle>
@@ -595,17 +853,16 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
           <Field label={t.auth.email}>
             <Input type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
-          <Field label="الاسم">
+          <Field label={t.settings.userName}>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field label={t.auth.password} hint={t.auth.passwordHint}>
             <Input type="password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           </Field>
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={form.role === "owner"} onCheckedChange={(c) => setForm({ ...form, role: c ? "owner" : "staff" })} /> دور المالك
+            <Switch checked={form.role === "owner"} onCheckedChange={(c) => setForm({ ...form, role: c ? "owner" : "staff" })} /> {t.settings.ownerRole}
           </label>
           <Button
-            size="sm"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -631,20 +888,30 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
 function DataHealthTab() {
   const { t } = useT();
   const health = useQuery(api.dataQuality.health);
-  if (!health) return <div className="text-sm text-muted-foreground">{t.common.loading}</div>;
+  if (!health)
+    return (
+      <div className="grid gap-4 lg:grid-cols-2" aria-busy>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-40 animate-pulse rounded-xl bg-secondary" />
+        ))}
+      </div>
+    );
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">الحقول الناقصة</CardTitle>
+          <CardTitle>{t.settings.missingFields}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {health.missingFields.map((m) => (
             <div key={m.rule} className="flex items-center justify-between gap-2">
               <span>
-                {m.description} <span className="text-xs text-muted-foreground" dir="ltr">({m.table}.{m.field})</span>
+                {m.description}{" "}
+                <span className="text-xs text-muted-foreground" dir="ltr">
+                  ({m.table}.{m.field})
+                </span>
               </span>
-              <span className={`tabular-nums ${m.percent > 30 ? "text-destructive" : ""}`}>
+              <span className={cn("tabular-nums", m.percent > 30 && "text-warning-text")}>
                 {m.missing}/{m.total} ({formatPercent(m.percent)}) <SeverityBadge value={m.severity} />
               </span>
             </div>
@@ -653,7 +920,7 @@ function DataHealthTab() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">بيانات قديمة وغير متحقق منها</CardTitle>
+          <CardTitle>{t.settings.staleData}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {health.stale.map((s) => (
@@ -677,7 +944,7 @@ function DataHealthTab() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">التكرارات المحتملة</CardTitle>
+          <CardTitle>{t.settings.possibleDuplicates}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {health.duplicates.map((d) => (
@@ -685,26 +952,26 @@ function DataHealthTab() {
               <span>
                 {d.table}.{d.key}
               </span>
-              <span className={d.groups > 0 ? "text-destructive" : ""}>{d.groups}</span>
+              <span className={cn("tabular-nums", d.groups > 0 && "font-medium text-warning-text")}>{d.groups}</span>
             </div>
           ))}
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">فشل التكاملات</CardTitle>
+          <CardTitle>{t.settings.integrationFailures}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           <div className="flex justify-between">
-            <span>تنفيذ اعتمادات فاشل</span>
+            <span>{t.settings.failedExecutions}</span>
             <span>{health.integrationFailures.failedExecutions}</span>
           </div>
           <div className="flex justify-between">
-            <span>استخراج مستندات فاشل</span>
+            <span>{t.settings.failedExtractions}</span>
             <span>{health.integrationFailures.failedExtractions}</span>
           </div>
           <div className="flex justify-between">
-            <span>مهام فاشلة</span>
+            <span>{t.settings.failedTasks}</span>
             <span>{health.integrationFailures.failedTasks}</span>
           </div>
         </CardContent>
@@ -736,27 +1003,38 @@ function GovernanceTab() {
     <div className="grid gap-4 lg:grid-cols-2">
       <Card id="conflicts" className="scroll-mt-20 lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base">
-            تعارضات بيانات غير محسومة {conflicts ? `(${conflicts.escalated.length})` : ""}
+          <CardTitle>
+            {t.settings.conflictsTitle} {conflicts ? `(${conflicts.escalated.length})` : ""}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            سجّلها وكيل عندما وجد قيمتين متعارضتين لنفس الحقل ولم تحسمها قواعد الأولوية (السلطة ← الحداثة ← التحديد ← التعاقد ← التحقق). قرارك يُسجَّل في التدقيق؛ وإن أردت تغيير قيمة السجل نفسه فافتحه من رابطه.
-          </p>
+          <p className="text-xs leading-5 text-muted-foreground">{t.settings.conflictsHint}</p>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           {conflicts?.escalated.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
-          {conflicts?.escalated.map((c) => <ConflictCard key={c._id} conflict={c} />)}
+          {conflicts?.escalated.map((c) => (
+            <ConflictCard key={c._id} conflict={c} />
+          ))}
           {conflicts && conflicts.resolved.length > 0 && (
             <details className="text-xs">
-              <summary className="cursor-pointer text-muted-foreground">تعارضات محسومة ({conflicts.resolved.length})</summary>
+              <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
+                {t.settings.resolvedConflicts} ({conflicts.resolved.length})
+              </summary>
               <div className="mt-2 space-y-1">
                 {conflicts.resolved.map((c) => (
                   <div key={c._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
                     <span>
-                      <span className="font-mono">{c.businessId}</span> · {c.record.href ? <Link href={c.record.href} className="underline-offset-4 hover:underline">{c.record.label}</Link> : c.record.label} · <span dir="ltr">{c.field}</span>
+                      <span className="font-mono">{c.businessId}</span> ·{" "}
+                      {c.record.href ? (
+                        <Link href={c.record.href} className="underline-offset-4 hover:underline">
+                          {c.record.label}
+                        </Link>
+                      ) : (
+                        c.record.label
+                      )}{" "}
+                      · <span dir="ltr">{c.field}</span>
                     </span>
                     <span className="text-muted-foreground">
-                      {labelOf(c.resolutionRule, locale)} → {typeof c.resolvedValue === "string" ? c.resolvedValue : JSON.stringify(c.resolvedValue)} · {c.resolvedBy?.type === "owner" ? "المالك" : "آلياً"} · {formatDate(c.resolvedAt, locale, true)}
+                      {labelOf(c.resolutionRule, locale)} → {typeof c.resolvedValue === "string" ? c.resolvedValue : JSON.stringify(c.resolvedValue)} ·{" "}
+                      {c.resolvedBy?.type === "owner" ? t.common.owner : t.settings.automatically} · {formatDate(c.resolvedAt, locale, true)}
                     </span>
                   </div>
                 ))}
@@ -767,51 +1045,63 @@ function GovernanceTab() {
       </Card>
       <Card id="notifications" className="scroll-mt-20">
         <CardHeader>
-          <CardTitle className="text-base">{t.dashboard.notifications}</CardTitle>
+          <CardTitle>{t.dashboard.notifications}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {notifications?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
           {notifications?.map((n) => (
-            <div key={n._id} className="flex items-start justify-between gap-2 rounded-md border p-2">
+            <div key={n._id} className="flex items-start justify-between gap-2 rounded-lg border border-border p-3">
               <div className="min-w-0">
                 <div className="font-medium">{n.title}</div>
-                <div className="whitespace-pre-wrap text-xs text-muted-foreground">{n.body}</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">{formatDate(n.createdAt, locale, true)}</div>
+                <div className="text-xs leading-5 whitespace-pre-wrap text-muted-foreground">{n.body}</div>
+                <div className="mt-1 text-xs text-hint">{formatDate(n.createdAt, locale, true)}</div>
               </div>
-              <Button size="xs" variant="ghost" aria-label={t.attention.markRead} onClick={() => markRead({ notificationId: n._id })}>
-                ✓
+              <Button size="icon-sm" variant="ghost" aria-label={t.attention.markRead} onClick={() => markRead({ notificationId: n._id })}>
+                <CheckIcon />
               </Button>
             </div>
           ))}
-          <Button size="sm" variant="outline" className="mt-2" onClick={() => ensure().then((r) => toast.success(`agents ${r.agents} · matrix ${r.matrix} · tools ${r.tools}`)).catch((e) => toast.error(e.message))}>
-            تثبيت الإعدادات الافتراضية (الوكلاء/المصفوفة/الأدوات)
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            onClick={() =>
+              ensure()
+                .then((r) => toast.success(`agents ${r.agents} · matrix ${r.matrix} · tools ${r.tools}`))
+                .catch((e) => toast.error(e.message))
+            }
+          >
+            {t.settings.installDefaults}
           </Button>
         </CardContent>
       </Card>
       <Card id="gaps" className="scroll-mt-20">
         <CardHeader>
-          <CardTitle className="text-base">
-            فجوات البيانات والمعرفة {gaps ? `(${gaps.data.length + gaps.knowledge.length})` : ""}
+          <CardTitle>
+            {t.settings.gapsTitle} {gaps ? `(${gaps.data.length + gaps.knowledge.length})` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {gaps?.data.map((g) => (
-            <div key={g._id} className="flex items-center justify-between gap-2 rounded-md border p-2">
+            <div key={g._id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
               <span>
                 {g.description} — {g.affectedCount}/{g.totalCount} ({formatPercent(g.percent)}) <SeverityBadge value={g.severity} />
               </span>
-              <Button size="xs" variant="ghost" onClick={() => dismissGap({ kind: "data", id: g._id })}>
-                تجاهل
+              <Button size="sm" variant="ghost" onClick={() => dismissGap({ kind: "data", id: g._id })}>
+                {t.chat.dismiss}
               </Button>
             </div>
           ))}
           {gaps?.knowledge.map((g) => (
-            <div key={g._id} className="flex items-center justify-between gap-2 rounded-md border p-2">
+            <div key={g._id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
               <span>
-                ❓ {g.question} <span className="text-xs text-muted-foreground">({g.occurrences}× · {labelOf(g.askedBy, locale)})</span>
+                {g.question}{" "}
+                <span className="text-xs text-muted-foreground">
+                  ({g.occurrences}× · {labelOf(g.askedBy, locale)})
+                </span>
               </span>
-              <Button size="xs" variant="ghost" onClick={() => dismissGap({ kind: "knowledge", id: g._id })}>
-                تجاهل
+              <Button size="sm" variant="ghost" onClick={() => dismissGap({ kind: "knowledge", id: g._id })}>
+                {t.chat.dismiss}
               </Button>
             </div>
           ))}
@@ -820,23 +1110,24 @@ function GovernanceTab() {
       </Card>
       <Card id="memories" className="scroll-mt-20">
         <CardHeader>
-          <CardTitle className="text-base">
-            اقتراحات ذاكرة بانتظار المراجعة {memories ? `(${memories.length})` : ""}
+          <CardTitle>
+            {t.settings.memoriesTitle} {memories ? `(${memories.length})` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {memories?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
           {memories?.map((m) => (
-            <div key={m._id} className="rounded-md border p-2">
+            <div key={m._id} className="rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1 text-xs">
-                  <AgentBadge slug={m.agentSlug} /> <StatusBadge value={m.type} /> {m.origin} {m.confidence !== undefined ? `· ثقة ${m.confidence}` : ""}
+                  <AgentBadge slug={m.agentSlug} /> <StatusBadge value={m.type} /> {m.origin}{" "}
+                  {m.confidence !== undefined ? `· ${t.inbox.confidence} ${m.confidence}` : ""}
                 </span>
                 <span className="flex gap-1">
-                  <Button size="xs" onClick={() => decideMemory({ memoryId: m._id, decision: "APPROVED" })}>
+                  <Button size="sm" onClick={() => decideMemory({ memoryId: m._id, decision: "APPROVED" })}>
                     {t.common.approve}
                   </Button>
-                  <Button size="xs" variant="outline" onClick={() => decideMemory({ memoryId: m._id, decision: "REJECTED" })}>
+                  <Button size="sm" variant="outline" onClick={() => decideMemory({ memoryId: m._id, decision: "REJECTED" })}>
                     {t.common.reject}
                   </Button>
                 </span>
@@ -877,14 +1168,14 @@ function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
     }
   }
   return (
-    <div className="space-y-2 rounded-md border p-3">
+    <div className="space-y-3 rounded-xl border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs">{c.businessId}</span>
           <StatusBadge value={c.status} />
           <span className="font-medium">
             {c.record.href ? (
-              <Link href={c.record.href} className="text-primary underline-offset-4 hover:underline">
+              <Link href={c.record.href} className="text-primary-text underline-offset-4 hover:underline">
                 {c.record.label}
               </Link>
             ) : (
@@ -908,10 +1199,10 @@ function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
       <table className="w-full text-xs">
         <thead className="text-muted-foreground">
           <tr>
-            <th className="p-1 text-start">القيمة</th>
+            <th className="p-1 text-start font-medium">{t.settings.value}</th>
             <th className="p-1 text-start">{t.common.trust}</th>
             <th className="p-1 text-start">{t.common.source}</th>
-            <th className="p-1 text-start">رُصدت</th>
+            <th className="p-1 text-start font-medium">{t.settings.observedAt}</th>
             <th className="p-1 text-start"></th>
           </tr>
         </thead>
@@ -921,7 +1212,7 @@ function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
               <td className="p-1 font-medium">{show(cand.value)}</td>
               <td className="p-1">
                 <TrustBadge trustLevel={cand.trustLevel} />
-                {cand.contractual && " · تعاقدي"}
+                {cand.contractual && ` · ${t.settings.contractual}`}
               </td>
               <td className="p-1 text-muted-foreground">
                 {cand.source.kind}
@@ -940,8 +1231,8 @@ function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
               </td>
               <td className="p-1 whitespace-nowrap">{formatDate(cand.observedAt, locale, true)}</td>
               <td className="p-1 text-end">
-                <Button size="xs" variant="outline" disabled={busy} onClick={() => decide(cand.value, `owner_pick:${i + 1}`)}>
-                  اعتماد هذه القيمة
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => decide(cand.value, `owner_pick:${i + 1}`)}>
+                  {t.settings.pickValue}
                 </Button>
               </td>
             </tr>
@@ -949,17 +1240,17 @@ function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
         </tbody>
       </table>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="قيمة أخرى (اختياري)">
+        <Field label={t.settings.otherValue}>
           <Input value={custom} onChange={(e) => setCustom(e.target.value)} className="w-40" dir="ltr" />
         </Field>
         <Field label={t.common.reason}>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} className="w-64" />
         </Field>
         <Button size="sm" disabled={busy || !custom.trim() || !reason.trim()} onClick={() => decide(custom.trim(), reason.trim())}>
-          حسم بهذه القيمة
+          {t.settings.resolveWith}
         </Button>
         <Button size="sm" variant="ghost" disabled={busy || !reason.trim()} onClick={() => decide(null, `not_a_conflict: ${reason.trim()}`)}>
-          ليس تعارضاً (إغلاق)
+          {t.settings.notAConflict}
         </Button>
       </div>
     </div>

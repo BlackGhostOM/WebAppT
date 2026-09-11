@@ -36,7 +36,17 @@ interface FormState {
   runAtLocal: string;
 }
 
-const EMPTY: FormState = { title: "", agentSlug: "executive", request: "", priority: "NORMAL", frequency: "WEEKLY", dayOfWeek: 0, dayOfMonth: 1, time: "08:00", runAtLocal: "" };
+const EMPTY: FormState = {
+  title: "",
+  agentSlug: "executive",
+  request: "",
+  priority: "NORMAL",
+  frequency: "WEEKLY",
+  dayOfWeek: 0,
+  dayOfMonth: 1,
+  time: "08:00",
+  runAtLocal: "",
+};
 const DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const DAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const errMsg = (e: unknown, fallback: string) => (e as { data?: { message?: string } }).data?.message ?? (e instanceof Error ? e.message : fallback);
@@ -143,12 +153,18 @@ export function CustomSchedulesPanel({ isOwner }: { isOwner: boolean }) {
                 <span className="font-medium">{r.title}</span>
                 <AgentBadge slug={r.agentSlug} />
                 <StatusBadge value={r.priority} />
-                <span className="text-xs text-muted-foreground">{describeRule({ frequency: r.frequency, hour: r.hour, minute: r.minute, dayOfWeek: r.dayOfWeek, dayOfMonth: r.dayOfMonth, runAt: r.runAt }, locale)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {describeRule(
+                    { frequency: r.frequency, hour: r.hour, minute: r.minute, dayOfWeek: r.dayOfWeek, dayOfMonth: r.dayOfMonth, runAt: r.runAt },
+                    locale,
+                  )}
+                </span>
               </div>
               <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.request}</div>
-              <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+              <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
                 <span>
-                  {t.settings.nextRun}: {r.enabled && r.nextRunAt ? `${formatDate(r.nextRunAt, locale, true)} (${formatRelative(r.nextRunAt, locale)})` : t.settings.disabled}
+                  {t.settings.nextRun}:{" "}
+                  {r.enabled && r.nextRunAt ? `${formatDate(r.nextRunAt, locale, true)} (${formatRelative(r.nextRunAt, locale)})` : t.settings.disabled}
                 </span>
                 <span>
                   {t.settings.lastRunLabel}: {r.lastRunAt ? formatDate(r.lastRunAt, locale, true) : t.settings.never}
@@ -165,13 +181,14 @@ export function CustomSchedulesPanel({ isOwner }: { isOwner: boolean }) {
                 <span>
                   {t.settings.runs}: {r.runCount}
                 </span>
-                {r.lastSkipReason && <span className="text-destructive">{r.lastSkipReason}</span>}
+                {r.lastSkipReason && <span className="text-destructive-text">{r.lastSkipReason}</span>}
               </div>
             </div>
             {isOwner && (
               <div className="flex flex-wrap items-center gap-1">
                 <label className="flex items-center gap-1 text-xs">
-                  <Switch checked={r.enabled} disabled={busy} onCheckedChange={(c) => act(() => setEnabled({ id: r._id, enabled: !!c }), t.common.save)} /> {t.settings.enabled}
+                  <Switch checked={r.enabled} disabled={busy} onCheckedChange={(c) => act(() => setEnabled({ id: r._id, enabled: !!c }), t.common.save)} />{" "}
+                  {t.settings.enabled}
                 </label>
                 <Button size="xs" variant="outline" disabled={busy} onClick={() => act(() => runNow({ id: r._id }), t.settings.runNow)}>
                   <PlayIcon data-icon="inline-start" /> {t.settings.runNow}
@@ -206,48 +223,90 @@ export function CustomSchedulesPanel({ isOwner }: { isOwner: boolean }) {
               <div className="grid gap-3">
                 <div className="grid gap-1">
                   <Label>{t.settings.scheduleTitle}</Label>
-                  <Input value={editing.form.title} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, title: e.target.value } })} maxLength={120} />
+                  <Input
+                    value={editing.form.title}
+                    onChange={(e) => setEditing({ ...editing, form: { ...editing.form, title: e.target.value } })}
+                    maxLength={120}
+                  />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1">
                     <Label>{t.settings.scheduleAgent}</Label>
-                    <Picker value={editing.form.agentSlug} onChange={(v) => setEditing({ ...editing, form: { ...editing.form, agentSlug: v } })} options={AGENT_SLUGS.map((s) => ({ value: s, label: labelOf(s, locale) }))} />
+                    <Picker
+                      value={editing.form.agentSlug}
+                      onChange={(v) => setEditing({ ...editing, form: { ...editing.form, agentSlug: v } })}
+                      options={AGENT_SLUGS.map((s) => ({ value: s, label: labelOf(s, locale) }))}
+                    />
                   </div>
                   <div className="grid gap-1">
                     <Label>{t.settings.priority}</Label>
-                    <Picker value={editing.form.priority} onChange={(v) => setEditing({ ...editing, form: { ...editing.form, priority: v } })} options={TASK_PRIORITIES.map((p) => ({ value: p, label: labelOf(p, locale) }))} />
+                    <Picker
+                      value={editing.form.priority}
+                      onChange={(v) => setEditing({ ...editing, form: { ...editing.form, priority: v } })}
+                      options={TASK_PRIORITIES.map((p) => ({ value: p, label: labelOf(p, locale) }))}
+                    />
                   </div>
                 </div>
                 <div className="grid gap-1">
                   <Label>{t.settings.scheduleRequest}</Label>
-                  <Textarea rows={5} value={editing.form.request} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, request: e.target.value } })} placeholder="مثال: راجع خط المبيعات، حدّد العملاء الراكدين والمتابعات المتأخرة، واقترح رسالة متابعة لكل منهم بلغته." />
+                  <Textarea
+                    rows={5}
+                    value={editing.form.request}
+                    onChange={(e) => setEditing({ ...editing, form: { ...editing.form, request: e.target.value } })}
+                    placeholder="مثال: راجع خط المبيعات، حدّد العملاء الراكدين والمتابعات المتأخرة، واقترح رسالة متابعة لكل منهم بلغته."
+                  />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="grid gap-1">
                     <Label>{t.settings.frequency}</Label>
-                    <Picker value={editing.form.frequency} onChange={(v) => setEditing({ ...editing, form: { ...editing.form, frequency: v } })} options={SCHEDULE_FREQUENCIES.map((f) => ({ value: f, label: labelOf(f, locale) }))} />
+                    <Picker
+                      value={editing.form.frequency}
+                      onChange={(v) => setEditing({ ...editing, form: { ...editing.form, frequency: v } })}
+                      options={SCHEDULE_FREQUENCIES.map((f) => ({ value: f, label: labelOf(f, locale) }))}
+                    />
                   </div>
                   {editing.form.frequency === "WEEKLY" && (
                     <div className="grid gap-1">
                       <Label>{t.settings.dayOfWeek}</Label>
-                      <Picker value={String(editing.form.dayOfWeek)} onChange={(v) => setEditing({ ...editing, form: { ...editing.form, dayOfWeek: Number(v) } })} options={days.map((d, i) => ({ value: String(i), label: d }))} />
+                      <Picker
+                        value={String(editing.form.dayOfWeek)}
+                        onChange={(v) => setEditing({ ...editing, form: { ...editing.form, dayOfWeek: Number(v) } })}
+                        options={days.map((d, i) => ({ value: String(i), label: d }))}
+                      />
                     </div>
                   )}
                   {editing.form.frequency === "MONTHLY" && (
                     <div className="grid gap-1">
                       <Label>{t.settings.dayOfMonth}</Label>
-                      <Input type="number" dir="ltr" min={1} max={28} value={editing.form.dayOfMonth} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, dayOfMonth: Number(e.target.value) } })} />
+                      <Input
+                        type="number"
+                        dir="ltr"
+                        min={1}
+                        max={28}
+                        value={editing.form.dayOfMonth}
+                        onChange={(e) => setEditing({ ...editing, form: { ...editing.form, dayOfMonth: Number(e.target.value) } })}
+                      />
                     </div>
                   )}
                   {editing.form.frequency === "ONCE" ? (
                     <div className="grid gap-1">
                       <Label>{t.settings.runAt}</Label>
-                      <Input type="datetime-local" dir="ltr" value={editing.form.runAtLocal} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, runAtLocal: e.target.value } })} />
+                      <Input
+                        type="datetime-local"
+                        dir="ltr"
+                        value={editing.form.runAtLocal}
+                        onChange={(e) => setEditing({ ...editing, form: { ...editing.form, runAtLocal: e.target.value } })}
+                      />
                     </div>
                   ) : (
                     <div className="grid gap-1">
                       <Label>{t.settings.time}</Label>
-                      <Input type="time" dir="ltr" value={editing.form.time} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, time: e.target.value } })} />
+                      <Input
+                        type="time"
+                        dir="ltr"
+                        value={editing.form.time}
+                        onChange={(e) => setEditing({ ...editing, form: { ...editing.form, time: e.target.value } })}
+                      />
                     </div>
                   )}
                 </div>
@@ -256,7 +315,15 @@ export function CustomSchedulesPanel({ isOwner }: { isOwner: boolean }) {
                 <Button variant="outline" onClick={() => setEditing(null)}>
                   {t.common.cancel}
                 </Button>
-                <Button onClick={save} disabled={busy || editing.form.title.trim().length < 2 || editing.form.request.trim().length < 10 || (editing.form.frequency === "ONCE" && !editing.form.runAtLocal)}>
+                <Button
+                  onClick={save}
+                  disabled={
+                    busy ||
+                    editing.form.title.trim().length < 2 ||
+                    editing.form.request.trim().length < 10 ||
+                    (editing.form.frequency === "ONCE" && !editing.form.runAtLocal)
+                  }
+                >
                   {t.common.save}
                 </Button>
               </DialogFooter>
