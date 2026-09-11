@@ -4,20 +4,31 @@ import * as React from "react"
 import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area"
 import { cn } from "cn"
 
+/**
+ * `min-h-0` / `min-w-0` let the root shrink inside flex/grid parents so the
+ * viewport (not the parent) becomes the scrolling element. `viewportRef` and
+ * `viewportClassName` expose the scrolling element for auto-scroll logic.
+ */
 function ScrollArea({
   className,
   children,
+  viewportRef,
+  viewportClassName,
   ...props
-}: ScrollAreaPrimitive.Root.Props) {
+}: ScrollAreaPrimitive.Root.Props & { viewportRef?: React.Ref<HTMLDivElement>; viewportClassName?: string }) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
-      className={cn("relative", className)}
+      className={cn("relative min-h-0 min-w-0", className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        ref={viewportRef}
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className={cn(
+          "size-full overscroll-contain rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
+          viewportClassName
+        )}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

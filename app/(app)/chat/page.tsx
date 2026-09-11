@@ -35,9 +35,14 @@ export default function ChatPage() {
   const [premium, setPremium] = useState(false);
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
+  // Follow new messages only while the reader is already near the bottom; never yank them away from older text.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (distanceFromBottom < 240) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [data?.messages.length, data?.activeTask?.status]);
 
   const activeTask = data?.activeTask ?? null;
@@ -69,15 +74,15 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="grid h-[calc(100vh-8rem)] gap-4 lg:grid-cols-[220px_1fr_320px]">
-      <Card className="hidden flex-col overflow-hidden lg:flex">
+    <div className="grid h-[calc(100dvh-8rem)] min-h-[420px] gap-4 lg:grid-cols-[220px_1fr_320px]">
+      <Card className="hidden min-h-0 flex-col overflow-hidden lg:flex">
         <div className="flex items-center justify-between border-b p-2">
           <span className="text-sm font-medium">{t.nav.chat}</span>
           <Button size="icon-sm" variant="ghost" aria-label={t.chat.newConversation} onClick={() => setConversationId(undefined)}>
             <PlusIcon />
           </Button>
         </div>
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-0.5 p-1">
             {conversations?.map((c) => (
               <button
@@ -95,8 +100,8 @@ export default function ChatPage() {
       </Card>
 
       <Card className="flex min-h-0 flex-col overflow-hidden">
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-3">
+        <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
+          <div className="space-y-3 p-4">
             {!data && conversationId && <div className="text-sm text-muted-foreground">{t.common.loading}</div>}
             {(!conversationId || data?.messages.length === 0) && <EmptyState>{t.chat.placeholder}</EmptyState>}
             {data?.messages.map((m) => {
@@ -140,7 +145,7 @@ export default function ChatPage() {
             <div ref={bottomRef} />
           </div>
         </ScrollArea>
-        <form onSubmit={onSend} className="border-t p-3">
+        <form onSubmit={onSend} className="shrink-0 border-t p-3">
           <div className="flex items-end gap-2">
             <Textarea
               value={text}
@@ -173,8 +178,8 @@ export default function ChatPage() {
       </Card>
 
       <Card className="hidden min-h-0 flex-col overflow-hidden lg:flex">
-        <div className="border-b p-2 text-sm font-medium">{t.chat.liveTree}</div>
-        <ScrollArea className="flex-1 p-2">
+        <div className="shrink-0 border-b p-2 text-sm font-medium">{t.chat.liveTree}</div>
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="p-2">
           {!data?.activeTree.length && <EmptyState>{t.common.empty}</EmptyState>}
           <div className="space-y-2">
             {data?.activeTree.map((task) => {
