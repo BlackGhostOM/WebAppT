@@ -111,7 +111,7 @@ npx convex env remove OWNER_PASSWORD --prod
 التكامل مبني في الكود ويعمل تلقائياً عند وجود مفتاح DSN؛ بدونه لا يُرسل شيء وتبقى الأخطاء في سجلات Vercel وConvex فقط.
 
 1. أنشئ حساباً على sentry.io ثم مشروعاً واحداً من نوع **Next.js** (يكفي مشروع واحد؛ الأحداث موسومة `runtime` = `nextjs-client` / `nextjs-server` / `nextjs-edge` / `convex`). انسخ الـDSN من Settings → Client Keys.
-2. **Vercel** → Project → Settings → Environment Variables: `NEXT_PUBLIC_SENTRY_DSN` = الـDSN (Production + Preview)، ثم Redeploy. اختيارياً لرفع خرائط المصدر: `SENTRY_AUTH_TOKEN` (Sensitive) + `SENTRY_ORG` + `SENTRY_PROJECT`.
+2. **الواجهة**: الـDSN الحالي موضوع كقيمة افتراضية في `next.config.ts` (مفتاح كتابة عام بطبيعته). لتغييره أو تعطيله دون تعديل الكود: Vercel → Project → Settings → Environment Variables: `NEXT_PUBLIC_SENTRY_DSN` (قيمة فارغة = تعطيل)، ثم Redeploy. اختيارياً لرفع خرائط المصدر: `SENTRY_AUTH_TOKEN` (Sensitive) + `SENTRY_ORG` + `SENTRY_PROJECT`.
 3. **Convex**: `npx convex env set SENTRY_DSN=<DSN>` — يفعّل تقارير حلقة الوكلاء (`MODEL_ERROR` وأعطال الحلقة)، ونقاط HTTP العامة (webhook إنستجرام، نموذج التواصل)، وأعطال مهام cron عبر `observability.runCron`.
 4. تحقّق: افتح صفحة غير موجودة داخل التطبيق أو أوقف الشبكة أثناء مهمة وكيل؛ يجب أن يظهر الحدث في Sentry خلال ثوانٍ مع وسم `runtime` والبيئة (`production` / `prod`).
 

@@ -8,11 +8,14 @@ import type { NextConfig } from "next";
  */
 const DEFAULT_CONVEX_URL = "https://quiet-hyena-590.convex.cloud";
 const DEFAULT_CONVEX_SITE_URL = "https://quiet-hyena-590.convex.site";
+/** Sentry DSN: a public write-only key by design (it ships in every browser bundle). Set NEXT_PUBLIC_SENTRY_DSN="" to disable. */
+const DEFAULT_SENTRY_DSN = "https://7b613acbe3619be26d78e021463d05ab@o4512067724836864.ingest.us.sentry.io/4512067731259392";
 
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL ?? DEFAULT_CONVEX_URL,
     NEXT_PUBLIC_CONVEX_SITE_URL: process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? DEFAULT_CONVEX_SITE_URL,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN ?? DEFAULT_SENTRY_DSN,
   },
 };
 
