@@ -36,14 +36,23 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  // Conversation whose first render was already scrolled to the latest message.
+  const openedConversationRef = useRef<string | null>(null);
 
-  // Follow new messages only while the reader is already near the bottom; never yank them away from older text.
+  // Opening (or switching) a conversation lands on the latest message. Afterwards, follow new messages only
+  // while the reader is already near the bottom; never yank them away from older text.
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport || !data) return;
+    const key = conversationId ?? "none";
+    if (openedConversationRef.current !== key) {
+      openedConversationRef.current = key;
+      viewport.scrollTop = viewport.scrollHeight;
+      return;
+    }
     const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
     if (distanceFromBottom < 240) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [data?.messages.length, data?.activeTask?.status]);
+  }, [conversationId, data, data?.messages.length, data?.activeTask?.status]);
 
   const activeTask = data?.activeTask ?? null;
   const running = !!activeTask && ACTIVE.has(activeTask.status);
