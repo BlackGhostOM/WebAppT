@@ -178,7 +178,7 @@ function PayloadPreview({ kind, payload }: { kind: string; payload: Record<strin
     <div className="space-y-2">
       {message && <div className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">{message}</div>}
       {kind === "SEND_QUOTE" && Array.isArray(payload.priceWarnings) && (payload.priceWarnings as string[]).length > 0 && (
-        <ul className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
+        <ul className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-text">
           {(payload.priceWarnings as string[]).map((w) => (
             <li key={w}>⚠️ {w}</li>
           ))}

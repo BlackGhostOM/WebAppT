@@ -111,7 +111,7 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
               </dl>
               {lead.summary && <div className="rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">{lead.summary}</div>}
               {data && data.approvals.length > 0 && (
-                <div className="rounded-md border border-yellow-300 bg-yellow-50 p-2 text-xs dark:bg-yellow-950/30">
+                <div className="rounded-lg border border-warning/40 bg-warning-soft p-2 text-xs text-warning-text">
                   بانتظار اعتمادك: {data.approvals.map((a) => a.title).join("؛ ")} —{" "}
                   <Link href="/approvals" className="text-primary underline">
                     {t.approvals.title}
@@ -164,7 +164,7 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
                     {formatMoney(q.totals.customerSellingPrice, locale)} · صالح حتى {formatDate(q.validUntil, locale)}
                   </div>
                   {q.priceWarnings.length > 0 && (
-                    <ul className="mt-1 text-xs text-yellow-800">
+                    <ul className="mt-1 text-xs text-warning-text">
                       {q.priceWarnings.map((w) => (
                         <li key={w}>⚠️ {w}</li>
                       ))}

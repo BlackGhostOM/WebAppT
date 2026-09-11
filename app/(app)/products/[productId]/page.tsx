@@ -159,7 +159,7 @@ export default function ProductDetailPage() {
         }
       />
       {estimatedComponents > 0 && (
-        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:bg-yellow-950/30 dark:text-yellow-200">⚠️ {estimatedComponents} مكوّن بسعر استرشادي (ESTIMATED) — يحتاج تأكيداً من المورد قبل استخدامه في عرض للعميل. أكّد الأسعار من صفحة الباقات.</div>
+        <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-text">⚠️ {estimatedComponents} مكوّن بسعر استرشادي (ESTIMATED) — يحتاج تأكيداً من المورد قبل استخدامه في عرض للعميل. أكّد الأسعار من صفحة الباقات.</div>
       )}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

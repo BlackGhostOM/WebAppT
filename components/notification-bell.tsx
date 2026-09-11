@@ -12,8 +12,8 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const TONE: Record<string, string> = {
-  CRITICAL: "bg-destructive text-destructive-foreground",
-  WARNING: "bg-amber-500 text-white",
+  CRITICAL: "bg-destructive-text text-white",
+  WARNING: "bg-warning-text text-white",
   INFO: "bg-primary text-primary-foreground",
 };
 

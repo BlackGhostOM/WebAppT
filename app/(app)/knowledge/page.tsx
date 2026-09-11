@@ -288,7 +288,7 @@ export default function KnowledgePage() {
                   </TableCell>
                   <TableCell>{d.extractionStatus === "EXTRACTED" ? d.chunkCount : labelOf(d.extractionStatus, locale)}</TableCell>
                   <TableCell>{d.citationCount}</TableCell>
-                  <TableCell>{d.proposalsPending > 0 ? <span className="text-yellow-800">{d.proposalsPending}</span> : "—"}</TableCell>
+                  <TableCell>{d.proposalsPending > 0 ? <span className="font-medium text-warning-text">{d.proposalsPending}</span> : "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

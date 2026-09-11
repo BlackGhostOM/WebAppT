@@ -6,7 +6,7 @@
  * locales; labels are plain text nodes so they inherit the page font.
  */
 
-const PALETTE = ["#0f766e", "#2563eb", "#d97706", "#db2777", "#7c3aed", "#64748b"];
+const PALETTE = ["var(--chart-1)", "var(--chart-3)", "var(--chart-4)", "var(--chart-6)", "var(--chart-2)", "var(--chart-5)"];
 
 export interface SeriesDef {
   key: string;
@@ -113,8 +113,8 @@ export function LineChart({ points, color = PALETTE[0], height = 160, formatValu
         ))}
         {reference && (
           <g>
-            <line x1={padL} x2={width - 8} y1={y(reference.value)} y2={y(reference.value)} stroke="#dc2626" strokeDasharray="4 3" strokeOpacity={0.7} />
-            <text x={width - 10} y={y(reference.value) - 3} fontSize={9} textAnchor="end" fill="#dc2626">
+            <line x1={padL} x2={width - 8} y1={y(reference.value)} y2={y(reference.value)} stroke="var(--destructive)" strokeDasharray="4 3" strokeOpacity={0.7} />
+            <text x={width - 10} y={y(reference.value) - 3} fontSize={9} textAnchor="end" fill="var(--destructive-text)">
               {reference.label}
             </text>
           </g>

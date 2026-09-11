@@ -57,7 +57,7 @@ export default function ContactPage() {
         </CardHeader>
         <CardContent>
           {state === "sent" ? (
-            <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
+            <div className="rounded-lg border border-success/30 bg-success-soft p-4 text-sm text-success-text" role="status">
               {t.contact.sent}
             </div>
           ) : (
@@ -89,9 +89,9 @@ export default function ContactPage() {
                 <label htmlFor="website">Website</label>
                 <input id="website" name="website" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
-              {state === "contact_required" && <p className="text-sm text-red-600">{t.contact.contactRequired}</p>}
-              {state === "error" && <p className="text-sm text-red-600">{t.contact.failed}</p>}
-              {state === "rate_limited" && <p className="text-sm text-red-600">{t.contact.rateLimited}</p>}
+              {state === "contact_required" && <p className="text-sm text-destructive-text">{t.contact.contactRequired}</p>}
+              {state === "error" && <p className="text-sm text-destructive-text">{t.contact.failed}</p>}
+              {state === "rate_limited" && <p className="text-sm text-destructive-text">{t.contact.rateLimited}</p>}
               <Button type="submit" disabled={state === "busy"}>
                 {t.contact.send}
               </Button>

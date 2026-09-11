@@ -130,7 +130,7 @@ export default function ProductsPage() {
       />
 
       {proposed && proposed.length > 0 && (
-        <Card className="border-yellow-300 bg-yellow-50/60 dark:bg-yellow-950/20">
+        <Card className="border-warning/40 bg-warning-soft">
           <CardHeader>
             <CardTitle className="text-base">أسعار استرشادية من بحث الوكلاء بانتظار تأكيدك ({proposed.length})</CardTitle>
             <p className="text-xs text-muted-foreground">كل سعر هنا موسوم ESTIMATED مع رابط المصدر ووقت الرصد؛ لا يدخل عرضاً للعميل قبل تأكيد المورد.</p>

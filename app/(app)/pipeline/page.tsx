@@ -109,7 +109,7 @@ export default function PipelinePage() {
                 V{q.version} · منتج {q.productVersion ?? "—"} · حتى {formatDate(q.validUntil, locale)}
               </div>
               <div className="mt-1 tabular-nums">{formatMoney(q.totals.customerSellingPrice, locale)}</div>
-              {q.priceWarnings.length > 0 && <div className="mt-1 text-xs text-yellow-800">⚠️ {q.priceWarnings.length} تحذير سعر</div>}
+              {q.priceWarnings.length > 0 && <div className="mt-1 text-xs text-warning-text">⚠️ {q.priceWarnings.length} تحذير سعر</div>}
             </button>
           ))}
         </div>

@@ -119,7 +119,7 @@ function OverviewTab({ locale }: { locale: "ar" | "en" }) {
           <LineChart points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.revenueOmr }))} formatValue={(n) => formatNumber(n, 0)} />
         </Section>
         <Section title={t.reports.costTrend}>
-          <LineChart points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.agentCostUsd }))} color="#d97706" formatValue={(n) => `$${formatNumber(n, 1)}`} />
+          <LineChart points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.agentCostUsd }))} color="var(--chart-4)" formatValue={(n) => `$${formatNumber(n, 1)}`} />
         </Section>
         <Section title={t.dashboard.conversion}>
           <table className="w-full text-sm">
@@ -172,10 +172,10 @@ function SupportTab({ locale }: { locale: "ar" | "en" }) {
           <BreakdownBars items={toEntries(r.byChannel, locale)} />
         </Section>
         <Section title={t.reports.byKind}>
-          <BreakdownBars items={toEntries(r.byKind, locale)} color="#d97706" />
+          <BreakdownBars items={toEntries(r.byKind, locale)} color="var(--chart-4)" />
         </Section>
         <Section title={t.reports.byStatus}>
-          <BreakdownBars items={toEntries(r.byStatus, locale)} color="#0f766e" />
+          <BreakdownBars items={toEntries(r.byStatus, locale)} color="var(--chart-3)" />
         </Section>
         <Section title={t.reports.openNow}>
           <div className="space-y-1 text-sm">
@@ -190,7 +190,7 @@ function SupportTab({ locale }: { locale: "ar" | "en" }) {
           </div>
         </Section>
         <Section title={t.reports.followUpsByStatus}>
-          <BreakdownBars items={toEntries(r.followUps, locale)} color="#7c3aed" />
+          <BreakdownBars items={toEntries(r.followUps, locale)} color="var(--chart-6)" />
         </Section>
       </div>
     </div>
@@ -270,13 +270,13 @@ function CostTab() {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title={t.reports.dailyCost} onExport={() => downloadCsv(`cost-${r.monthKey}.csv`, r.byDay)}>
-          <LineChart points={r.byDay.slice(0, r.daysElapsed).map((d) => ({ label: String(d.day), value: d.costUsd }))} color="#d97706" formatValue={(n) => `$${formatNumber(n, 2)}`} reference={r.budgetUsd > 0 ? { value: r.budgetUsd / r.daysInMonth, label: `${t.reports.budget}/يوم` } : undefined} />
+          <LineChart points={r.byDay.slice(0, r.daysElapsed).map((d) => ({ label: String(d.day), value: d.costUsd }))} color="var(--chart-4)" formatValue={(n) => `$${formatNumber(n, 2)}`} reference={r.budgetUsd > 0 ? { value: r.budgetUsd / r.daysInMonth, label: `${t.reports.budget}/يوم` } : undefined} />
         </Section>
         <Section title={t.reports.byOrigin}>
           <BreakdownBars items={Object.entries(r.byOrigin).map(([k, v]) => ({ label: `${k} (${v.calls})`, value: v.costUsd }))} formatValue={(n) => formatUsd(n)} />
         </Section>
         <Section title={t.reports.byModel}>
-          <BreakdownBars items={r.byModel.map((m) => ({ label: `${m.model} (${m.calls})`, value: m.costUsd }))} formatValue={(n) => formatUsd(n)} color="#2563eb" />
+          <BreakdownBars items={r.byModel.map((m) => ({ label: `${m.model} (${m.calls})`, value: m.costUsd }))} formatValue={(n) => formatUsd(n)} color="var(--chart-1)" />
         </Section>
         <Section title={t.reports.byAgent}>
           <div className="space-y-1 text-sm">

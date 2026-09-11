@@ -165,7 +165,7 @@ function ThreadPanel({ interactionId }: { interactionId: Id<"interactions"> }) {
                     {m.deliveryStatus && <Badge variant="outline" className="h-4 px-1 text-[10px]">{labelOf(m.deliveryStatus, locale)}</Badge>}
                   </div>
                   <div className="whitespace-pre-wrap">{m.body}</div>
-                  {m.deliveryError && <div className="mt-1 text-[11px] text-red-600">{m.deliveryError}</div>}
+                  {m.deliveryError && <div className="mt-1 text-xs text-destructive-text">{m.deliveryError}</div>}
                 </div>
               ))}
             </div>
@@ -198,7 +198,7 @@ function ThreadPanel({ interactionId }: { interactionId: Id<"interactions"> }) {
                   {escalatedTask.model ? ` · ${escalatedTask.model}` : ""}
                 </Link>
               )}
-              {task?.error && <span className="text-red-600">{task.error}</span>}
+              {task?.error && <span className="text-destructive-text">{task.error}</span>}
               {interaction.direction === "INBOUND" && !["REPLIED", "CLOSED"].includes(interaction.status) && (!task || ["COMPLETED", "FAILED", "CANCELLED"].includes(task.status)) && !pending && (
                 <Button size="xs" variant="outline" disabled={busy} onClick={() => run(() => reprocess({ interactionId }), t.inbox.reprocess)}>
                   {t.inbox.reprocess}

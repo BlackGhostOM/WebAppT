@@ -291,7 +291,7 @@ function RecordFormBody({ def, onOpenChange, existing, onSaved }: Omit<RecordFor
             </fieldset>
           )}
           {duplicates && duplicates.length > 0 && (
-            <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
+            <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-text">
               <div className="font-medium">{t.data.duplicates}</div>
               <p className="text-xs">{t.data.duplicatesHint}</p>
               <ul className="mt-1 list-disc ps-5">
