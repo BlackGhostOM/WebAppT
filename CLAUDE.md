@@ -102,6 +102,15 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   (requestedBy `cron:<job>`); `runtime.completeTask` notifies the owner for those.
 - Reports are pure read models in `services/reports.ts`; never store computed KPIs.
 
+## Agent loop guards (learned in production)
+- Web search: provider blocks are kept verbatim (`raw`) so page content survives tool calls; `webSearchMaxUses` (settings,
+  default 8); no `user_location` (API rejects "OM"); a 400 naming web_search retries once without the tool (`notes`).
+- Never finish on a truncated or empty reply: `max_tokens` → nudge (≤2), empty final text → one summary nudge,
+  `max_uses_exceeded` → one fresh-budget nudge. Output cap 16k tokens (8k Haiku); thinking counts against it.
+- Product agent can draft reference data from research (`create_destination`, `create_supplier_draft`, `create_hotel_draft`,
+  `create_attraction_draft`, `create_experience_draft`) — AI_EXTRACTED records the owner verifies; duplicates are returned
+  as candidates, not created.
+
 ## Inbound channels (Phase 3)
 - HTTP (convex/http.ts → convex/inbound/http.ts): `GET/POST /webhooks/instagram`, `POST /api/contact` (10/min per IP,
   honeypot field `website`). Both call `services/inbox.ts::receiveInbound` → customer match (channelIdentities → phone/email

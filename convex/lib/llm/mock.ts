@@ -129,6 +129,14 @@ export function createMockProvider(): LLMProvider {
         };
       }
 
+      // [[max_tokens]] → a reply cut off by the output limit (no tool call, no conclusion).
+      if (/\[\[max_tokens\]\]/.test(script)) {
+        return { content: [{ type: "text", text: "(وضع المحاكاة) بدأت تصميم الباقة: اليوم الأول مسقط، اليوم الثاني نزوى و" }], stopReason: "max_tokens", usage, model: "mock", provider: "mock" };
+      }
+      // [[empty]] → a turn that ends with no text at all (e.g. only server-side searches).
+      if (/\[\[empty\]\]/.test(script)) {
+        return { content: [], stopReason: "end_turn", usage, model: "mock", provider: "mock" };
+      }
       // [[search_limit]] → behaves like a run that exhausted the web-search budget and stopped.
       if (/\[\[search_limit\]\]/.test(script)) {
         return {

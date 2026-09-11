@@ -9,7 +9,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { agentActor, type Actor } from "../lib/actor";
-import { appError, errorMessage } from "../lib/errors";
+import { appError, errorMessage, isAppError } from "../lib/errors";
 import type { JsonSchema } from "../lib/llm/types";
 import * as V from "../lib/vocab";
 import { createApproval } from "../services/approvals";
@@ -82,6 +82,12 @@ export const TOOL_SPECS: ToolSpec[] = [
   { name: "delegate_task", kind: "write_internal", severity: "D1", requiresApproval: false, allowedAgents: ["executive"], description: "يوكل مهمة فرعية إلى وكيل مختص (product/sales/support). تُنفَّذ بشكل مستقل وتعود نتائجها إليك عند اكتمالها.", inputSchema: obj({ agentSlug: enumOf(["product", "sales", "support"], "الوكيل المختص"), title: str("عنوان قصير"), request: str("الطلب التفصيلي مع السياق اللازم"), customerIds: arr(str("معرّف عميل"), "العملاء الذين تخص المهمة (لوكيل الدعم)"), leadIds: arr(str("معرّف عميل محتمل"), "العملاء المحتملون ذوو الصلة"), productIds: arr(str("معرّف منتج"), "المنتجات ذات الصلة"), bookingIds: arr(str("معرّف حجز"), "الحجوزات ذات الصلة") }, ["agentSlug", "title", "request"]) },
   { name: "request_owner_decision", kind: "write_internal", severity: "D3", requiresApproval: false, approvalKind: "OTHER", allowedAgents: ["executive"], description: "يضع قراراً في صندوق اعتماد المالك ويوقف المهمة حتى يرد. استخدمه للاستثناءات والمبالغ الكبيرة وأي قرار بشري.", inputSchema: obj({ title: str("عنوان القرار"), question: str("السؤال بصياغة تسمح بالقرار بنقرة"), options: arr(str("خيار"), "الخيارات المقترحة"), recommendation: str("توصيتك وسببها") }, ["title", "question"]) },
   { name: "web_search_note", kind: "write_internal", severity: "D1", requiresApproval: false, allowedAgents: ["product", "executive"], description: "يسجّل نتيجة بحث ويب كمصدر مُوثَّق (رابط، عنوان، مقتطف، وقت الرصد) على المهمة.", inputSchema: obj({ url: str("الرابط"), title: str("العنوان"), snippet: str("المقتطف ذو الصلة") }, ["url", "title"]) },
+  // Reference data the product agent may draft from research (AI_EXTRACTED / E_AI_ESTIMATE; the owner verifies later).
+  { name: "create_destination", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ وجهة سياحية غير موجودة (مدينة/منطقة/جبل/صحراء…) لتُربط بها الفنادق والمنتجات. ابحث أولاً بـsearch_destinations؛ إن وُجدت وجهة مشابهة تُعاد لك لتستخدمها.", inputSchema: obj({ name: str("الاسم بالعربية"), nameEn: str("الاسم بالإنجليزية"), kind: enumOf(V.DESTINATION_KINDS, "النوع"), governorate: str("المحافظة (اختياري)"), description: str("وصف قصير (اختياري)"), bestSeasons: arr(enumOf(V.SEASONS, "موسم"), "أفضل المواسم (اختياري)"), acknowledgeDuplicates: { type: "boolean", description: "true فقط إذا راجعت السجلات المشابهة وتأكدت أن هذه وجهة مختلفة" } }, ["name", "nameEn", "kind"]) },
+  { name: "create_supplier_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ مورداً بحالة PROSPECT (فندق، شركة تأجير سيارات، مشغّل أنشطة…) اكتشفته في البحث، حتى تُربط به الأسعار الاسترشادية. يُوسم مستخرجاً آلياً ويعتمده المالك لاحقاً. ابحث أولاً بـsearch_suppliers.", inputSchema: obj({ name: str("اسم المورد"), nameEn: str("الاسم بالإنجليزية (اختياري)"), supplierType: enumOf(V.SUPPLIER_TYPES, "نوع المورد"), website: str("الموقع الإلكتروني أو رابط صفحة الحجز (اختياري)"), phone: str("الهاتف إن ظهر في المصدر (اختياري)"), email: str("البريد إن ظهر في المصدر (اختياري)"), city: str("المدينة (اختياري)"), notes: str("ملاحظات: من أين استُخرجت البيانات وما الذي يحتاج تأكيداً"), acknowledgeDuplicates: { type: "boolean", description: "true فقط إذا راجعت السجلات المشابهة وتأكدت أنه مورد مختلف" } }, ["name", "supplierType"]) },
+  { name: "create_hotel_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ فندقاً بحالة DRAFT مرتبطاً بوجهة (ومورد إن وُجد) حتى تُسجَّل أسعار غرفه. ابحث أولاً بـsearch_hotels.", inputSchema: obj({ name: str("اسم الفندق"), nameEn: str("الاسم بالإنجليزية (اختياري)"), destinationId: str("معرّف الوجهة"), supplierId: str("معرّف المورد (اختياري؛ أنشئه بـcreate_supplier_draft إن لم يوجد)"), category: enumOf(V.HOTEL_CATEGORIES, "التصنيف"), address: str("العنوان (اختياري)"), website: str("الموقع أو رابط الحجز (اختياري)"), phone: str("الهاتف (اختياري)"), amenities: arr(str("مرفق"), "المرافق (اختياري)"), notes: str("ملاحظات ومصدر البيانات"), acknowledgeDuplicates: { type: "boolean", description: "true فقط بعد مراجعة السجلات المشابهة" } }, ["name", "destinationId", "category"]) },
+  { name: "create_attraction_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ معلماً سياحياً (قلعة، سوق، وادي…) مرتبطاً بوجهة لاستخدامه في البرنامج اليومي. ابحث أولاً بـsearch_attractions.", inputSchema: obj({ name: str("الاسم"), nameEn: str("الاسم بالإنجليزية (اختياري)"), destinationId: str("معرّف الوجهة"), category: str("الفئة (اختياري)"), description: str("وصف قصير (اختياري)"), visitDurationMinutes: int("مدة الزيارة بالدقائق (اختياري)"), entryFee: money("رسم الدخول إن ذُكر في المصدر (اختياري)"), openingHours: str("ساعات العمل (اختياري)"), notes: str("مصدر البيانات"), acknowledgeDuplicates: { type: "boolean", description: "true فقط بعد مراجعة السجلات المشابهة" } }, ["name", "destinationId"]) },
+  { name: "create_experience_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ تجربة/نشاطاً (تخييم صحراوي، رحلة قارب، مسار جبلي…) بحالة DRAFT مع مشغّله إن وُجد. ابحث أولاً بـsearch_experiences.", inputSchema: obj({ name: str("الاسم"), nameEn: str("الاسم بالإنجليزية (اختياري)"), destinationId: str("معرّف الوجهة (اختياري)"), supplierId: str("معرّف المورد المشغّل (اختياري)"), description: str("الوصف"), durationHours: num("المدة بالساعات (اختياري)"), difficulty: enumOf(V.DIFFICULTY_LEVELS, "الصعوبة (اختياري)"), minPax: int("الحد الأدنى للأفراد (اختياري)"), maxPax: int("الحد الأقصى للأفراد (اختياري)"), seasons: arr(enumOf(V.SEASONS, "موسم"), "المواسم (اختياري)"), notes: str("مصدر البيانات"), acknowledgeDuplicates: { type: "boolean", description: "true فقط بعد مراجعة السجلات المشابهة" } }, ["name"]) },
   { name: "create_research_rate", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يسجّل سعراً استرشادياً من البحث. يُوسم ESTIMATED / E_AI_ESTIMATE تلقائياً ويتطلب رابط المصدر ووقت الرصد.", inputSchema: obj({ supplierId: str("معرّف المورد"), hotelId: str("معرّف الفندق (اختياري)"), experienceId: str("معرّف التجربة (اختياري)"), componentType: enumOf(V.COMPONENT_TYPES, "نوع المكوّن"), serviceType: str("رمز الخدمة مثل HOTEL_ROOM"), serviceDescription: str("وصف الخدمة"), roomType: str("نوع الغرفة (اختياري)"), rateBasis: enumOf(V.RATE_BASES, "أساس السعر"), amount: num("المبلغ"), currency: str("العملة"), season: enumOf(V.SEASONS, "الموسم"), validFrom: str("ISO (اختياري)"), validTo: str("ISO (اختياري)"), cancellationTerms: str("شروط الإلغاء إن ذُكرت"), sourceUrl: str("رابط المصدر"), notes: str("ملاحظات") }, ["supplierId", "componentType", "serviceType", "serviceDescription", "rateBasis", "amount", "currency", "season", "sourceUrl"]) },
   { name: "create_product_draft", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "ينشئ مسودة منتج/باقة (حالة DESIGN). التفعيل قرار المالك.", inputSchema: obj({ name: str("اسم المنتج"), nameEn: str("الاسم بالإنجليزية"), productType: enumOf(V.PRODUCT_TYPES, "النوع"), durationDays: int("عدد الأيام"), durationNights: int("عدد الليالي"), summary: str("ملخص"), destinationIds: arr(str("معرّف وجهة"), "الوجهات"), highlights: arr(str("نقطة"), "أبرز المعالم"), inclusions: arr(str("عنصر"), "يشمل"), exclusions: arr(str("عنصر"), "لا يشمل"), seasons: arr(enumOf(V.SEASONS, "موسم"), "المواسم"), supplierCost: money("تكلفة الموردين للفرد"), internalCost: money("التكلفة الداخلية للفرد"), minSellingPrice: money("الحد الأدنى لسعر البيع"), recommendedSellingPrice: money("السعر المقترح"), customerSellingPrice: money("سعر البيع للعميل"), targetMarginPercent: num("الهامش المستهدف %") }, ["name", "productType", "durationDays", "durationNights", "summary"]) },
   { name: "add_product_component", kind: "write_internal", severity: "D2", requiresApproval: false, allowedAgents: ["product"], description: "يضيف مكوّناً لمسودة منتج (فندق/نقل/نشاط…) مع ربطه بسعر مورد إن وُجد.", inputSchema: obj({ productId: str("معرّف المنتج"), componentType: enumOf(V.COMPONENT_TYPES, "النوع"), description: str("الوصف"), dayNumber: int("اليوم (اختياري)"), quantity: num("الكمية"), unit: enumOf(V.RATE_BASES, "الوحدة"), supplierId: str("معرّف المورد (اختياري)"), hotelId: str("معرّف الفندق (اختياري)"), experienceId: str("معرّف التجربة (اختياري)"), rateId: str("معرّف السعر (اختياري)"), supplierCost: money("تكلفة المورد"), internalCost: money("التكلفة الداخلية"), minSellingPrice: money("الحد الأدنى"), recommendedSellingPrice: money("المقترح"), customerSellingPrice: money("سعر العميل") }, ["productId", "componentType", "description", "quantity", "unit"]) },
@@ -159,9 +165,26 @@ function list(input: Record<string, unknown>, key: string): string[] {
   const v = input[key];
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
-function id<T extends "customers" | "leads" | "products" | "bookings" | "suppliers" | "hotels" | "experiences" | "rates" | "quotes" | "interactions" | "campaigns" | "destinations">(ctx: MutationCtx, table: T, raw: string | undefined): Id<T> | undefined {
+function id<T extends "customers" | "leads" | "products" | "bookings" | "suppliers" | "hotels" | "experiences" | "attractions" | "rates" | "quotes" | "interactions" | "campaigns" | "destinations">(ctx: MutationCtx, table: T, raw: string | undefined): Id<T> | undefined {
   if (!raw) return undefined;
   return ctx.db.normalizeId(table, raw) ?? undefined;
+}
+
+/**
+ * Creates a reference record from research. Duplicate candidates are returned to
+ * the model (not an error) so it reuses the existing id instead of forking data.
+ */
+async function createDraftRecord(ctx: MutationCtx, actor: Actor, key: "destinations" | "suppliers" | "hotels" | "attractions" | "experiences", data: Record<string, unknown>, acknowledgeDuplicates: boolean, label: string): Promise<ToolOutcome> {
+  try {
+    const result = await createRecord(ctx, actor, key, data, { acknowledgeDuplicates });
+    return { content: `أُنشئ ${label} ${result.businessId} (معرّف ${result.id}) كسجل مستخرج آلياً بانتظار تحقق المالك. استخدم هذا المعرّف في الخطوات التالية.` };
+  } catch (e) {
+    if (isAppError(e, "DUPLICATE")) {
+      const candidates = ((e.data.details as { candidates?: unknown[] } | undefined)?.candidates ?? []) as { _id: string; businessId: string; label: string; matchedOn: string[] }[];
+      return { content: `توجد سجلات مشابهة بالفعل — استخدم معرّفها بدل إنشاء جديد: ${json(candidates.map((c) => ({ id: c._id, businessId: c.businessId, name: c.label, matchedOn: c.matchedOn })))}. إن كان سجلك مختلفاً فعلاً أعد الاستدعاء مع acknowledgeDuplicates=true.` };
+    }
+    throw e;
+  }
 }
 
 function pick<T extends Record<string, unknown>>(rows: T[], keys: string[]): Record<string, unknown>[] {
@@ -354,9 +377,25 @@ export async function executeTool(ctx: MutationCtx, task: Doc<"tasks">, agent: D
         await ctx.db.patch(task._id, { citations: [...task.citations, citation].slice(-50) });
         return { content: `سُجّل المصدر ${url} (وقت الرصد ${new Date(citation.retrievedAt).toISOString()}).`, citations: [citation] };
       }
+      case "create_destination":
+        return await createDraftRecord(ctx, actor, "destinations", { name: s(input, "name"), nameEn: s(input, "nameEn"), kind: s(input, "kind"), governorate: s(input, "governorate"), description: s(input, "description"), bestSeasons: list(input, "bestSeasons"), status: "ACTIVE" }, input.acknowledgeDuplicates === true, "الوجهة");
+      case "create_supplier_draft":
+        return await createDraftRecord(ctx, actor, "suppliers", { name: s(input, "name"), nameEn: s(input, "nameEn"), supplierType: s(input, "supplierType"), status: "PROSPECT", website: s(input, "website"), phone: s(input, "phone"), email: s(input, "email"), city: s(input, "city"), notes: s(input, "notes"), tags: ["research"] }, input.acknowledgeDuplicates === true, "المورد");
+      case "create_hotel_draft": {
+        const destinationId = id(ctx, "destinations", s(input, "destinationId"));
+        if (!destinationId) return { content: "destinationId غير صالح — أنشئ الوجهة أولاً بـcreate_destination أو ابحث عنها بـsearch_destinations", isError: true };
+        return await createDraftRecord(ctx, actor, "hotels", { name: s(input, "name"), nameEn: s(input, "nameEn"), destinationId, supplierId: id(ctx, "suppliers", s(input, "supplierId")), category: s(input, "category"), address: s(input, "address"), website: s(input, "website"), phone: s(input, "phone"), amenities: list(input, "amenities"), notes: s(input, "notes"), status: "DRAFT" }, input.acknowledgeDuplicates === true, "الفندق");
+      }
+      case "create_attraction_draft": {
+        const destinationId = id(ctx, "destinations", s(input, "destinationId"));
+        if (!destinationId) return { content: "destinationId غير صالح — أنشئ الوجهة أولاً بـcreate_destination", isError: true };
+        return await createDraftRecord(ctx, actor, "attractions", { name: s(input, "name"), nameEn: s(input, "nameEn"), destinationId, category: s(input, "category"), description: s(input, "description"), visitDurationMinutes: n(input, "visitDurationMinutes"), entryFee: input.entryFee, openingHours: s(input, "openingHours"), notes: s(input, "notes"), status: "DRAFT" }, input.acknowledgeDuplicates === true, "المعلم");
+      }
+      case "create_experience_draft":
+        return await createDraftRecord(ctx, actor, "experiences", { name: s(input, "name"), nameEn: s(input, "nameEn"), destinationId: id(ctx, "destinations", s(input, "destinationId")), supplierId: id(ctx, "suppliers", s(input, "supplierId")), description: s(input, "description"), durationHours: n(input, "durationHours"), difficulty: s(input, "difficulty"), minPax: n(input, "minPax"), maxPax: n(input, "maxPax"), seasons: list(input, "seasons"), notes: s(input, "notes"), status: "DRAFT" }, input.acknowledgeDuplicates === true, "التجربة");
       case "create_research_rate": {
         const supplierId = id(ctx, "suppliers", s(input, "supplierId"));
-        if (!supplierId) return { content: "supplierId غير صالح", isError: true };
+        if (!supplierId) return { content: "supplierId غير صالح — ابحث عن المورد بـsearch_suppliers أو أنشئه بـcreate_supplier_draft ثم أعد المحاولة", isError: true };
         const result = await createResearchRate(ctx, actor, {
           supplierId,
           hotelId: id(ctx, "hotels", s(input, "hotelId")),

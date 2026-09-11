@@ -19,6 +19,14 @@ import { compactTranscript } from "../lib/llm/transcript";
 import type { LlmContentBlock, LlmMessage, LlmResponse } from "../lib/llm/types";
 import { SEARCH_LIMIT_ERROR, webSearchErrorsOf, webSearchQueriesOf, webSourcesOf } from "../lib/llm/webSources";
 
+/** Output budget per call. Thinking tokens count against it, so it is far above a normal answer. */
+function maxTokensFor(model: string): number {
+  return /haiku/i.test(model) ? 8192 : 16_000;
+}
+
+const MAX_TOKENS_NUDGE = "[ملاحظة النظام] توقف ردك السابق لأنه بلغ حد الطول. تابع من حيث توقفت بإيجاز: سجّل ما اكتشفته عبر الأدوات (استدعاء لكل عنصر) قبل الكتابة، ثم قدّم الملخص المطلوب مختصراً بالمعرّفات.";
+const EMPTY_RESULT_NUDGE = "[ملاحظة النظام] أنهيت دورك دون أي ناتج نصي. اكتب الآن الملخص المطلوب للمالك: ما أُنجز (بالمعرّفات)، ما ينتظر الاعتماد، ما تعذّر ولماذا، والخطوة التالية.";
+
 /** Told to the model once when it stops after exhausting the per-call search budget. */
 function searchLimitNudge(maxUses: number): string {
   return `[ملاحظة النظام] توقفت بعد تجاوز حد عمليات البحث لهذا الاستدعاء (${maxUses}). لديك الآن ${maxUses} عمليات بحث جديدة في هذه الخطوة. أولاً سجّل كل سعر وجدته بالفعل عبر create_research_rate (مع الرابط ووقت الرصد)، ثم ابحث عن العناصر المتبقية باستعلام واحد دقيق لكل عنصر، وسجّل فجوة معرفة (record_knowledge_gap) لكل عنصر لم تجد له سعراً بدلاً من التوقف. أنهِ المهمة بالملخص المطلوب فقط بعد ذلك.`;
@@ -119,6 +127,8 @@ export const run = internalAction({
     const webSearch = agent.slug === "product";
     const webSearchMaxUses = data.settings.runtime.webSearchMaxUses ?? 8;
     let nudgedAfterSearchLimit = false;
+    let maxTokenNudges = 0;
+    let nudgedEmptyResult = false;
 
     const finishCancelled = async () => {
       await ctx.runMutation(internal.agents.runtime.cancelFinalize, { taskId, partialResult: partial || undefined, transcript });
@@ -149,7 +159,7 @@ export const run = internalAction({
           companyContext: data.companyContext,
           messages: transcript,
           tools,
-          maxTokens: 4096,
+          maxTokens: maxTokensFor(model),
           webSearch,
           webSearchMaxUses,
         });
@@ -196,11 +206,26 @@ export const run = internalAction({
         await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript, partialResult: partial || undefined });
         continue;
       }
+      const hitMaxTokens = response.stopReason === "max_tokens";
       if (toolUses.length === 0 && hitSearchLimit && !nudgedAfterSearchLimit) {
         // The model gave up after the per-call search budget ran out; give it one fresh call to finish properly.
         nudgedAfterSearchLimit = true;
         transcript = compactTranscript([...transcript, { role: "user", content: [{ type: "text", text: searchLimitNudge(webSearchMaxUses) }] }]);
         await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript, partialResult: partial || undefined });
+        continue;
+      }
+      if (toolUses.length === 0 && hitMaxTokens && maxTokenNudges < 2) {
+        // Output was cut off (thinking + long answer): a truncated reply is never a finished task.
+        maxTokenNudges += 1;
+        transcript = compactTranscript([...transcript, { role: "user", content: [{ type: "text", text: MAX_TOKENS_NUDGE }] }]);
+        await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript, partialResult: partial || undefined });
+        continue;
+      }
+      if (toolUses.length === 0 && !text.trim() && !partial.trim() && !nudgedEmptyResult) {
+        // Searches or thinking without a single word for the owner: ask once for the summary.
+        nudgedEmptyResult = true;
+        transcript = compactTranscript([...transcript, { role: "user", content: [{ type: "text", text: EMPTY_RESULT_NUDGE }] }]);
+        await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript });
         continue;
       }
       if (toolUses.length === 0) {
@@ -227,6 +252,7 @@ export const run = internalAction({
       if (hitSearchLimit) {
         results.push({ type: "text", text: `[ملاحظة النظام] تجاوزت حد عمليات البحث في الاستدعاء السابق (${webSearchMaxUses}). لديك ${webSearchMaxUses} عمليات جديدة في هذه الخطوة؛ سجّل ما وجدته أولاً ثم تابع البحث عن المتبقي باستعلام واحد لكل عنصر.` });
       }
+      if (hitMaxTokens) results.push({ type: "text", text: MAX_TOKENS_NUDGE });
       transcript = compactTranscript([...transcript, { role: "user", content: results }]);
 
       if (createdSubtask) {
