@@ -17,7 +17,15 @@ export type LlmContentBlock =
   | { type: "text"; text: string }
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; toolUseId: string; content: string; isError?: boolean }
-  | { type: "web_search_result"; url: string; title: string; snippet: string; retrievedAt: number };
+  /** Legacy (schema 1.1 transcripts): a flattened web search hit. New transcripts keep the provider block instead. */
+  | { type: "web_search_result"; url: string; title: string; snippet: string; retrievedAt: number }
+  /**
+   * A provider-native block that must be sent back verbatim on the next call
+   * (server-side tool use, web search results with their encrypted page
+   * content, thinking blocks). `kind` is the provider's block type; `summary`
+   * is a short human-readable note for logs.
+   */
+  | { type: "raw"; provider: "anthropic"; kind: string; block: unknown; summary?: string; retrievedAt?: number };
 
 export interface LlmMessage {
   role: "user" | "assistant";
@@ -35,6 +43,8 @@ export interface LlmRequest {
   maxTokens: number;
   /** Enables the provider's server-side web search tool when supported. */
   webSearch?: boolean;
+  /** Searches allowed per model call (provider `max_uses`). */
+  webSearchMaxUses?: number;
   signal?: AbortSignal;
 }
 

@@ -4,24 +4,32 @@
  * - Prompt caching: the agent system prompt, the company context and the tool
  *   list each carry a cache breakpoint (most of the cost is repeated input).
  * - Adaptive thinking on Claude Sonnet 5 / Opus 5; Haiku 4.5 runs without it.
- * - Server-side web search when requested (version chosen per model).
+ * - Server-side web search when requested (version chosen per model, Omani
+ *   user location, `max_uses` from settings).
+ * - Provider-native blocks (server_tool_use, web_search_tool_result with the
+ *   encrypted page content, thinking) are kept verbatim in the transcript and
+ *   sent back unchanged, so search results survive tool calls and pauses.
  * - The SDK is imported lazily so the mock path never loads it.
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import type { LlmContentBlock, LlmRequest, LlmResponse, LlmStopReason, LLMProvider } from "./types";
 
+export const DEFAULT_WEB_SEARCH_MAX_USES = 8;
+
 function supportsAdaptiveThinking(model: string): boolean {
   return /sonnet-5|opus-5|opus-4-[678]|sonnet-4-6/.test(model);
 }
 
-function webSearchTool(model: string) {
+function webSearchTool(model: string, maxUses: number): Anthropic.Messages.ToolUnion {
   const dynamic = /sonnet-5|opus-5|opus-4-[678]|sonnet-4-6/.test(model);
+  const userLocation = { type: "approximate" as const, country: "OM", city: "Muscat", timezone: "Asia/Muscat" };
   return dynamic
-    ? { type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 5 }
-    : { type: "web_search_20250305" as const, name: "web_search" as const, max_uses: 5 };
+    ? { type: "web_search_20260209", name: "web_search", max_uses: maxUses, user_location: userLocation }
+    : { type: "web_search_20250305", name: "web_search", max_uses: maxUses, user_location: userLocation };
 }
 
-function toAnthropicMessages(messages: LlmRequest["messages"]): Anthropic.MessageParam[] {
+/** Transcript → API messages. Raw provider blocks go back exactly as received. */
+export function toAnthropicMessages(messages: LlmRequest["messages"]): Anthropic.MessageParam[] {
   return messages.map((m) => ({
     role: m.role,
     content: m.content.flatMap((block): Anthropic.ContentBlockParam[] => {
@@ -34,6 +42,8 @@ function toAnthropicMessages(messages: LlmRequest["messages"]): Anthropic.Messag
           return [{ type: "tool_result", tool_use_id: block.toolUseId, content: block.content, is_error: block.isError }];
         case "web_search_result":
           return [{ type: "text", text: `[بحث] ${block.title} — ${block.url}\n${block.snippet}` }];
+        case "raw":
+          return block.provider === "anthropic" ? [block.block as Anthropic.ContentBlockParam] : [];
       }
     }),
   }));
@@ -58,9 +68,9 @@ function mapStopReason(reason: string | null): LlmStopReason {
 }
 
 /**
- * Maps Anthropic content blocks to the provider-agnostic transcript. Server-side
- * web searches are kept as text notes (query) and `web_search_result` blocks
- * (url/title/time) so every price can be traced to its source (section 3.2).
+ * Maps Anthropic content blocks to the provider-agnostic transcript. Text and
+ * client tool calls are normalised; everything else (server tool use, search
+ * results, thinking) is kept as a `raw` block with a short summary for logs.
  */
 export function fromAnthropicContent(content: Anthropic.ContentBlock[], now: number = Date.now()): LlmContentBlock[] {
   const out: LlmContentBlock[] = [];
@@ -68,20 +78,16 @@ export function fromAnthropicContent(content: Anthropic.ContentBlock[], now: num
     if (block.type === "text") out.push({ type: "text", text: block.text });
     else if (block.type === "tool_use") out.push({ type: "tool_use", id: block.id, name: block.name, input: (block.input ?? {}) as Record<string, unknown> });
     else if (block.type === "server_tool_use") {
-      const query = typeof (block.input as { query?: unknown })?.query === "string" ? (block.input as { query: string }).query : JSON.stringify(block.input ?? {});
-      out.push({ type: "text", text: `[بحث ويب] ${query}` });
+      const query = typeof (block.input as { query?: unknown })?.query === "string" ? (block.input as { query: string }).query : undefined;
+      out.push({ type: "raw", provider: "anthropic", kind: "server_tool_use", block, summary: query ? `[بحث ويب] ${query}` : `[أداة خادمية] ${block.name}`, retrievedAt: now });
     } else if (block.type === "web_search_tool_result") {
-      const results = Array.isArray(block.content) ? block.content : [];
-      for (const r of results) {
-        if (r.type === "web_search_result") {
-          out.push({ type: "web_search_result", url: r.url, title: r.title, snippet: r.page_age ? `page_age=${r.page_age}` : "", retrievedAt: now });
-        }
-      }
-      if (!Array.isArray(block.content) && block.content && "error_code" in block.content) {
-        out.push({ type: "text", text: `[بحث ويب] خطأ: ${String((block.content as { error_code: string }).error_code)}` });
-      }
+      const results = Array.isArray(block.content) ? block.content.length : 0;
+      const error = !Array.isArray(block.content) && block.content && "error_code" in block.content ? String((block.content as { error_code: string }).error_code) : undefined;
+      out.push({ type: "raw", provider: "anthropic", kind: "web_search_tool_result", block, summary: error ? `[بحث ويب] خطأ: ${error}` : `[بحث ويب] ${results} نتائج`, retrievedAt: now });
+    } else {
+      // thinking, redacted_thinking, code execution results…: opaque, round-tripped verbatim.
+      out.push({ type: "raw", provider: "anthropic", kind: block.type, block, retrievedAt: now });
     }
-    // thinking blocks are not surfaced to the loop.
   }
   return out;
 }
@@ -99,7 +105,7 @@ export async function createAnthropicProvider(apiKey?: string): Promise<LLMProvi
         input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
         ...(i === request.tools.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
       }));
-      if (request.webSearch) tools.push(webSearchTool(request.model));
+      if (request.webSearch) tools.push(webSearchTool(request.model, Math.max(1, Math.min(20, request.webSearchMaxUses ?? DEFAULT_WEB_SEARCH_MAX_USES))));
 
       const params: Anthropic.MessageCreateParamsNonStreaming = {
         model: request.model,

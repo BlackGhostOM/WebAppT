@@ -76,6 +76,8 @@ export interface AgentRuntimeSettings {
   maxStepsPerTask: number;
   maxSubtaskDepth: number;
   cancelPollMs: number;
+  /** Server-side web searches allowed per model call (product agent research). $0.01 each. */
+  webSearchMaxUses: number;
 }
 
 export interface AllSettings {
@@ -108,7 +110,7 @@ export const DEFAULT_SETTINGS: AllSettings = {
   autoApprove: { kinds: [], faqAutoReply: false, followUpKinds: [], maxPerDay: 20, quietHours: { enabled: true, startHour: 22, endHour: 8 } },
   integrations: { metaConnected: false, whatsappConnected: false, instagramMode: "mock", resendConfigured: false },
   escalation: { bookingValueThresholdOmr: 2000, confidenceThreshold: 0.7 },
-  agentRuntime: { maxStepsPerTask: 12, maxSubtaskDepth: 2, cancelPollMs: 750 },
+  agentRuntime: { maxStepsPerTask: 12, maxSubtaskDepth: 2, cancelPollMs: 750, webSearchMaxUses: 8 },
   scheduledTasks: { dailyDigest: true, leadFollowUpReminders: false, leadRemindersPerDay: 5, weeklyExecutiveSummary: false, lifecycleFollowUps: true },
 };
 

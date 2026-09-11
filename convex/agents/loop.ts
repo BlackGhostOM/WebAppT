@@ -17,6 +17,12 @@ import { type ActionCtx, internalAction } from "../_generated/server";
 import { getLlmProvider } from "../lib/llm";
 import { compactTranscript } from "../lib/llm/transcript";
 import type { LlmContentBlock, LlmMessage, LlmResponse } from "../lib/llm/types";
+import { SEARCH_LIMIT_ERROR, webSearchErrorsOf, webSearchQueriesOf, webSourcesOf } from "../lib/llm/webSources";
+
+/** Told to the model once when it stops after exhausting the per-call search budget. */
+function searchLimitNudge(maxUses: number): string {
+  return `[ملاحظة النظام] توقفت بعد تجاوز حد عمليات البحث لهذا الاستدعاء (${maxUses}). لديك الآن ${maxUses} عمليات بحث جديدة في هذه الخطوة. أولاً سجّل كل سعر وجدته بالفعل عبر create_research_rate (مع الرابط ووقت الرصد)، ثم ابحث عن العناصر المتبقية باستعلام واحد دقيق لكل عنصر، وسجّل فجوة معرفة (record_knowledge_gap) لكل عنصر لم تجد له سعراً بدلاً من التوقف. أنهِ المهمة بالملخص المطلوب فقط بعد ذلك.`;
+}
 
 type RunData = NonNullable<Awaited<ReturnType<typeof loadRunData>>>;
 
@@ -110,6 +116,9 @@ export const run = internalAction({
     let partial = task.partialResult ?? "";
     // The step budget is per task, not per run: resumptions continue the same count.
     let steps = data.modelCallsSoFar;
+    const webSearch = agent.slug === "product";
+    const webSearchMaxUses = data.settings.runtime.webSearchMaxUses ?? 8;
+    let nudgedAfterSearchLimit = false;
 
     const finishCancelled = async () => {
       await ctx.runMutation(internal.agents.runtime.cancelFinalize, { taskId, partialResult: partial || undefined, transcript });
@@ -141,7 +150,8 @@ export const run = internalAction({
           messages: transcript,
           tools,
           maxTokens: 4096,
-          webSearch: agent.slug === "product",
+          webSearch,
+          webSearchMaxUses,
         });
       } catch (e) {
         await ctx.runMutation(internal.agents.runtime.failTask, { taskId, error: `MODEL_ERROR: ${e instanceof Error ? e.message : String(e)}`, partialResult: partial || undefined, transcript });
@@ -171,15 +181,24 @@ export const run = internalAction({
       }
 
       transcript = compactTranscript([...transcript, { role: "assistant", content: response.content }]);
-      const webSources = response.content.filter((b) => b.type === "web_search_result") as Extract<LlmContentBlock, { type: "web_search_result" }>[];
-      if (webSources.length > 0) {
-        await ctx.runMutation(internal.agents.runtime.addWebCitations, { taskId, sources: webSources.map((s) => ({ url: s.url, title: s.title, retrievedAt: s.retrievedAt })) });
+      const webSources = webSourcesOf(response.content);
+      const webQueries = webSearchQueriesOf(response.content);
+      if (webSources.length > 0 || webQueries.length > 0) {
+        await ctx.runMutation(internal.agents.runtime.addWebCitations, { taskId, sources: webSources.map((s) => ({ url: s.url, title: s.title, retrievedAt: s.retrievedAt })), queries: webQueries });
       }
+      const hitSearchLimit = webSearchErrorsOf(response.content).includes(SEARCH_LIMIT_ERROR);
       const text = textOf(response.content);
       if (text) partial = partial ? `${partial}\n\n${text}` : text;
       const toolUses = response.content.filter((b) => b.type === "tool_use") as Extract<LlmContentBlock, { type: "tool_use" }>[];
 
       if (response.stopReason === "pause_turn" && toolUses.length === 0) {
+        await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript, partialResult: partial || undefined });
+        continue;
+      }
+      if (toolUses.length === 0 && hitSearchLimit && !nudgedAfterSearchLimit) {
+        // The model gave up after the per-call search budget ran out; give it one fresh call to finish properly.
+        nudgedAfterSearchLimit = true;
+        transcript = compactTranscript([...transcript, { role: "user", content: [{ type: "text", text: searchLimitNudge(webSearchMaxUses) }] }]);
         await ctx.runMutation(internal.agents.runtime.saveTranscript, { taskId, transcript, partialResult: partial || undefined });
         continue;
       }
@@ -203,6 +222,9 @@ export const run = internalAction({
         results.push({ type: "tool_result", toolUseId: use.id, content: outcome.content, isError: outcome.isError });
         if (outcome.createdSubtaskId) createdSubtask = true;
         if (outcome.waitingDecision) waitingDecision = true;
+      }
+      if (hitSearchLimit) {
+        results.push({ type: "text", text: `[ملاحظة النظام] تجاوزت حد عمليات البحث في الاستدعاء السابق (${webSearchMaxUses}). لديك ${webSearchMaxUses} عمليات جديدة في هذه الخطوة؛ سجّل ما وجدته أولاً ثم تابع البحث عن المتبقي باستعلام واحد لكل عنصر.` });
       }
       transcript = compactTranscript([...transcript, { role: "user", content: results }]);
 

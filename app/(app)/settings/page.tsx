@@ -232,6 +232,9 @@ function ModelsTab({ routing, escalation, runtime, onSave, hints }: { routing: R
           <Field label="فترة فحص الإيقاف (مللي ثانية)">
             <Input type="number" dir="ltr" value={Number(rt.cancelPollMs ?? 750)} onChange={(ev) => setRt({ ...rt, cancelPollMs: Number(ev.target.value) })} />
           </Field>
+          <Field label="عمليات البحث على الويب لكل استدعاء (وكيل المنتجات)" hint="كل عملية بحث تكلف 0.01$. بين 1 و20؛ الافتراضي 8.">
+            <Input type="number" dir="ltr" min={1} max={20} value={Number(rt.webSearchMaxUses ?? 8)} onChange={(ev) => setRt({ ...rt, webSearchMaxUses: Number(ev.target.value) })} />
+          </Field>
           <Button size="sm" onClick={() => onSave("agentRuntime", rt)}>
             {t.common.save}
           </Button>

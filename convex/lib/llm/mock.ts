@@ -129,6 +129,21 @@ export function createMockProvider(): LLMProvider {
         };
       }
 
+      // [[search_limit]] → behaves like a run that exhausted the web-search budget and stopped.
+      if (/\[\[search_limit\]\]/.test(script)) {
+        return {
+          content: [
+            { type: "raw", provider: "anthropic", kind: "server_tool_use", block: { type: "server_tool_use", id: "srvtoolu_mock", name: "web_search", input: { query: "hotel price nizwa" } }, summary: "[بحث ويب] hotel price nizwa" },
+            { type: "raw", provider: "anthropic", kind: "web_search_tool_result", block: { type: "web_search_tool_result", tool_use_id: "srvtoolu_mock", content: { type: "web_search_tool_result_error", error_code: "max_uses_exceeded" } }, summary: "[بحث ويب] خطأ: max_uses_exceeded" },
+            { type: "text", text: "(وضع المحاكاة) تعذّر إكمال البحث: تجاوزت حد عمليات البحث." },
+          ],
+          stopReason: "end_turn",
+          usage,
+          model: "mock",
+          provider: "mock",
+        };
+      }
+
       const content: LlmContentBlock[] = [];
       const toolDirectives = [...script.matchAll(/\[\[tool:([a-z_]+):(\{.*?\})\]\]/g)];
       for (const d of toolDirectives) {

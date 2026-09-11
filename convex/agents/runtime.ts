@@ -201,15 +201,19 @@ export const runTool = internalMutation({
 
 /** Web sources surfaced by the model's server-side search become task citations (url + retrieval time). */
 export const addWebCitations = internalMutation({
-  args: { taskId: v.id("tasks"), sources: v.array(v.object({ url: v.string(), title: v.optional(v.string()), retrievedAt: v.number() })) },
-  handler: async (ctx, { taskId, sources }) => {
+  args: { taskId: v.id("tasks"), sources: v.array(v.object({ url: v.string(), title: v.optional(v.string()), retrievedAt: v.number() })), queries: v.optional(v.array(v.string())) },
+  handler: async (ctx, { taskId, sources, queries }) => {
     const task = await ctx.db.get(taskId);
-    if (!task || sources.length === 0) return;
+    if (!task) return;
     const known = new Set(task.citations.filter((c) => c.kind === "web").map((c) => (c as { url: string }).url));
     const fresh = sources.filter((s) => !known.has(s.url)).map((s) => ({ kind: "web" as const, url: s.url, title: s.title, retrievedAt: s.retrievedAt }));
-    if (fresh.length === 0) return;
-    await ctx.db.patch(taskId, { citations: [...task.citations, ...fresh].slice(-100) });
-    await appendRunStep(ctx, taskId, { kind: "NOTE", note: `مصادر بحث ويب مسجّلة: ${fresh.length}`, output: fresh.slice(0, 20) });
+    if (fresh.length > 0) await ctx.db.patch(taskId, { citations: [...task.citations, ...fresh].slice(-100) });
+    if (fresh.length === 0 && !(queries?.length)) return;
+    await appendRunStep(ctx, taskId, {
+      kind: "NOTE",
+      note: `بحث ويب: ${queries?.length ?? 0} استعلام${queries?.length ? ` (${queries.slice(0, 8).join(" | ")})` : ""} · مصادر جديدة: ${fresh.length}`,
+      output: { queries: queries?.slice(0, 20) ?? [], sources: fresh.slice(0, 20) },
+    });
   },
 });
 

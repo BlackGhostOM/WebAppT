@@ -4,6 +4,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { executeTool } from "../../convex/agents/tools";
 import { fromAnthropicContent } from "../../convex/lib/llm/anthropic";
 import { computeCostUsd } from "../../convex/lib/llm/pricing";
+import { webSourcesOf } from "../../convex/lib/llm/webSources";
 import { activateProduct, addProductComponent, createQuoteDraft, createResearchRate, productCosting } from "../../convex/services/commercial";
 import { createRecord, updateRecord } from "../../convex/services/records";
 import { pipelineReport } from "../../convex/services/reports";
@@ -234,8 +235,10 @@ describe("Phase 2 — web research provenance", () => {
       ] as never,
       now,
     );
-    expect(blocks[0]).toEqual({ type: "text", text: "[بحث ويب] Muscat hotel rates December" });
-    expect(blocks[1]).toMatchObject({ type: "web_search_result", url: "https://example-booking.com/muscat", title: "Muscat Bay Hotel", retrievedAt: now });
+    // Provider blocks are kept verbatim (so the encrypted page content survives the next call) with a log summary.
+    expect(blocks[0]).toMatchObject({ type: "raw", kind: "server_tool_use", summary: "[بحث ويب] Muscat hotel rates December" });
+    expect(blocks[1]).toMatchObject({ type: "raw", kind: "web_search_tool_result", retrievedAt: now });
+    expect(webSourcesOf(blocks, now)).toEqual([{ url: "https://example-booking.com/muscat", title: "Muscat Bay Hotel", pageAge: "2 days", retrievedAt: now }]);
     expect(computeCostUsd("claude-sonnet-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearchRequests: 3 })).toBeCloseTo(0.03, 6);
   });
 });

@@ -69,6 +69,11 @@ function validateSetting(key: SettingKey, value: Record<string, unknown>) {
       if (typeof q?.enabled !== "boolean" || !hourOk(q.startHour) || !hourOk(q.endHour)) throw appError("VALIDATION", "quietHours: ساعات بين 0 و23", { field: "quietHours" });
     }
   }
+  if (key === "agentRuntime") {
+    const rt = value as { webSearchMaxUses?: unknown; maxStepsPerTask?: unknown };
+    if (rt.webSearchMaxUses !== undefined && (typeof rt.webSearchMaxUses !== "number" || !Number.isInteger(rt.webSearchMaxUses) || rt.webSearchMaxUses < 1 || rt.webSearchMaxUses > 20)) throw appError("VALIDATION", "webSearchMaxUses: عدد صحيح بين 1 و20", { field: "webSearchMaxUses" });
+    if (rt.maxStepsPerTask !== undefined && (typeof rt.maxStepsPerTask !== "number" || rt.maxStepsPerTask < 1 || rt.maxStepsPerTask > 30)) throw appError("VALIDATION", "maxStepsPerTask: بين 1 و30", { field: "maxStepsPerTask" });
+  }
   if (key === "scheduledTasks") {
     const st = value as { leadRemindersPerDay?: unknown };
     if (st.leadRemindersPerDay !== undefined && (typeof st.leadRemindersPerDay !== "number" || !Number.isInteger(st.leadRemindersPerDay) || st.leadRemindersPerDay < 0 || st.leadRemindersPerDay > 50)) throw appError("VALIDATION", "leadRemindersPerDay: عدد صحيح بين 0 و50", { field: "leadRemindersPerDay" });

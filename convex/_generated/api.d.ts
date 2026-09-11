@@ -50,6 +50,7 @@ import type * as lib_llm_openaiCompat from "../lib/llm/openaiCompat.js";
 import type * as lib_llm_pricing from "../lib/llm/pricing.js";
 import type * as lib_llm_transcript from "../lib/llm/transcript.js";
 import type * as lib_llm_types from "../lib/llm/types.js";
+import type * as lib_llm_webSources from "../lib/llm/webSources.js";
 import type * as lib_money from "../lib/money.js";
 import type * as lib_settings from "../lib/settings.js";
 import type * as lib_validation from "../lib/validation.js";
@@ -131,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   "lib/llm/pricing": typeof lib_llm_pricing;
   "lib/llm/transcript": typeof lib_llm_transcript;
   "lib/llm/types": typeof lib_llm_types;
+  "lib/llm/webSources": typeof lib_llm_webSources;
   "lib/money": typeof lib_money;
   "lib/settings": typeof lib_settings;
   "lib/validation": typeof lib_validation;
