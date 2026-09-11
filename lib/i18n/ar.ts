@@ -3,7 +3,7 @@ export const ar = {
   appName: "مركز العمليات",
   nav: {
     dashboard: "لوحة القيادة",
-    chat: "المحادثة مع الوكيل التنفيذي",
+    chat: "المحادثة",
     approvals: "صندوق الاعتماد",
     tasks: "المهام",
     products: "الباقات",
@@ -14,6 +14,13 @@ export const ar = {
     data: "إدخال البيانات",
     knowledge: "مصادر المعرفة",
     settings: "الإعدادات",
+    more: "المزيد",
+  },
+  navGroups: {
+    daily: "العمل اليومي",
+    commercial: "المبيعات والمنتجات",
+    knowledge: "البيانات والمعرفة",
+    admin: "الإدارة",
   },
   common: {
     save: "حفظ",
@@ -40,6 +47,10 @@ export const ar = {
     required: "إلزامي",
     optional: "اختياري",
     signOut: "تسجيل الخروج",
+    menu: "القائمة",
+    skipToContent: "انتقل إلى المحتوى",
+    owner: "المالك",
+    staff: "موظف",
     language: "اللغة",
     trust: "مستوى الثقة",
     freshness: "الحداثة",

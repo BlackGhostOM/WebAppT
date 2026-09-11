@@ -35,11 +35,11 @@ export function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="relative inline-flex size-8 items-center justify-center rounded-lg hover:bg-muted"
+        className="relative inline-flex size-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none"
         aria-label={`${t.attention.title}${total ? ` (${total})` : ""}`}
       >
         <BellIcon className={cn("size-4", total > 0 && "text-foreground")} />
-        {total > 0 && <span className={cn("absolute -top-1 -end-1 min-w-4 rounded-full px-1 text-center text-[10px] font-semibold leading-4 tabular-nums", tone)}>{total > 99 ? "99+" : total}</span>}
+        {total > 0 && <span className={cn("absolute -top-1 -end-1 h-[18px] min-w-[18px] rounded-full px-1 text-center text-xs font-semibold leading-[18px] tabular-nums", tone)}>{total > 99 ? "99+" : total}</span>}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
@@ -59,7 +59,7 @@ export function NotificationBell() {
             <ul className="divide-y">
               {attention.items.map((item) => (
                 <li key={item.key}>
-                  <Link href={item.href} onClick={() => setOpen(false)} className="flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted">
+                  <Link href={item.href} onClick={() => setOpen(false)} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-accent">
                     <span>{t.attention[item.key as ItemKey] ?? item.key}</span>
                     <span className="flex items-center gap-1">
                       <span className={cn("min-w-5 rounded-full px-1.5 text-center text-xs font-semibold tabular-nums", TONE[item.severity])}>{item.count}</span>
@@ -79,7 +79,7 @@ export function NotificationBell() {
                         <div className="min-w-0">
                           <div className={cn("truncate font-medium", n.severity === "CRITICAL" && "text-destructive")}>{n.title}</div>
                           <div className="line-clamp-2 whitespace-pre-wrap text-muted-foreground">{n.body}</div>
-                          <div className="mt-0.5 text-[10px] text-muted-foreground">{formatRelative(n.createdAt, locale)}</div>
+                          <div className="mt-0.5 text-xs text-hint">{formatRelative(n.createdAt, locale)}</div>
                         </div>
                         <Button size="xs" variant="ghost" aria-label={t.attention.markRead} onClick={() => markRead({ notificationId: n._id })}>
                           ✓
@@ -92,7 +92,7 @@ export function NotificationBell() {
             )}
           </div>
         )}
-        <Link href="/settings?tab=governance" onClick={() => setOpen(false)} className="block border-t px-3 py-2 text-center text-xs text-primary underline-offset-4 hover:underline">
+        <Link href="/settings?tab=governance" onClick={() => setOpen(false)} className="block border-t px-3 py-2 text-center text-xs text-primary-text underline-offset-4 hover:underline">
           {t.attention.openGovernance}
         </Link>
       </PopoverContent>

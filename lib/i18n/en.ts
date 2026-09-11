@@ -5,7 +5,7 @@ export const en: Dictionary = {
   appName: "Operations Center",
   nav: {
     dashboard: "Dashboard",
-    chat: "Executive agent chat",
+    chat: "Chat",
     approvals: "Approval inbox",
     tasks: "Tasks",
     products: "Packages",
@@ -16,6 +16,13 @@ export const en: Dictionary = {
     data: "Data entry",
     knowledge: "Knowledge sources",
     settings: "Settings",
+    more: "More",
+  },
+  navGroups: {
+    daily: "Daily work",
+    commercial: "Sales & products",
+    knowledge: "Data & knowledge",
+    admin: "Administration",
   },
   common: {
     save: "Save",
@@ -42,6 +49,10 @@ export const en: Dictionary = {
     required: "Required",
     optional: "Optional",
     signOut: "Sign out",
+    menu: "Menu",
+    skipToContent: "Skip to content",
+    owner: "Owner",
+    staff: "Staff",
     language: "Language",
     trust: "Trust level",
     freshness: "Freshness",
