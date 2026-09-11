@@ -3,7 +3,8 @@
  * knowledge gaps, memory proposals.
  */
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { ownerActor, requireOwner, requireUser } from "./lib/actor";
 import { computeFreshness } from "./lib/freshness";
 import { resolveConflictByOwner, reviewMemory } from "./services/governance";
@@ -78,13 +79,45 @@ export const gaps = query({
   },
 });
 
+/** Tables a conflict may point at, with the owner page that shows the record. */
+const CONFLICT_TABLES = ["products", "customers", "suppliers", "hotels", "destinations", "attractions", "experiences", "rates", "bookings", "leads", "pricingRules", "policies", "decisionRegister", "quotes", "documents"] as const;
+type ConflictTable = (typeof CONFLICT_TABLES)[number];
+const WITH_BUSINESS_ID: readonly ConflictTable[] = ["products", "customers", "suppliers", "hotels", "destinations", "rates", "bookings", "leads", "quotes", "documents"];
+
+/** Finds the record behind a conflict whether the agent stored a Convex id or a business id, and builds its link. */
+async function describeRecord(ctx: QueryCtx, table: string, recordId: string | undefined): Promise<{ href?: string; label: string; found: boolean }> {
+  if (!recordId) return { label: table, found: false };
+  if (!(CONFLICT_TABLES as readonly string[]).includes(table)) return { label: `${table} · ${recordId}`, found: false };
+  const t = table as ConflictTable;
+  let doc: Record<string, unknown> | null = null;
+  const normalized = ctx.db.normalizeId(t, recordId);
+  if (normalized) doc = (await ctx.db.get(normalized)) as Record<string, unknown> | null;
+  if (!doc && WITH_BUSINESS_ID.includes(t)) {
+    doc = (await ctx.db
+      .query(t as "products")
+      .withIndex("by_businessId", (q) => q.eq("businessId", recordId))
+      .unique()) as Record<string, unknown> | null;
+  }
+  if (!doc) return { label: `${table} · ${recordId}`, found: false };
+  const id = String(doc._id);
+  const label = String(doc.name ?? doc.fullName ?? doc.title ?? doc.contactName ?? doc.serviceDescription ?? doc.businessId ?? recordId);
+  const href = t === "products" ? `/products/${id}` : `/data/${t}?id=${id}`;
+  return { href, label: doc.businessId ? `${label} (${String(doc.businessId)})` : label, found: true };
+}
+
+async function enrichConflict(ctx: QueryCtx, c: Doc<"dataConflicts">) {
+  const record = await describeRecord(ctx, c.table, c.recordId);
+  const task = c.taskId ? await ctx.db.get(c.taskId) : null;
+  return { ...c, record, task: task ? { _id: task._id, businessId: task.businessId, title: task.title, agentSlug: task.agentSlug } : null };
+}
+
 export const conflicts = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    const escalated = await ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).take(100);
+    const escalated = await ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).order("desc").take(100);
     const resolved = await ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "RESOLVED")).order("desc").take(30);
-    return { escalated, resolved };
+    return { escalated: await Promise.all(escalated.map((c) => enrichConflict(ctx, c))), resolved: await Promise.all(resolved.map((c) => enrichConflict(ctx, c))) };
   },
 });
 

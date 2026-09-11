@@ -91,3 +91,28 @@ export const watchdog = internalMutation({
     return { failed };
   },
 });
+
+/** One-off/idempotent: give every escalated conflict that predates conflict notifications its owner notification. */
+export const backfillConflictNotifications = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const escalated = await ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).take(200);
+    const existing = new Set((await ctx.db.query("notifications").order("desc").take(500)).filter((n) => n.kind === "DATA_CONFLICT").map((n) => n.relatedRecordId));
+    let created = 0;
+    for (const c of escalated) {
+      if (existing.has(c._id)) continue;
+      const lines = c.candidates.map((cand, i) => `${i + 1}) ${typeof cand.value === "string" ? cand.value : JSON.stringify(cand.value)} — ${cand.trustLevel} — ${cand.source.kind}${cand.source.ref ? `: ${cand.source.ref}` : ""}`);
+      await ctx.db.insert("notifications", {
+        kind: "DATA_CONFLICT",
+        title: `تعارض بيانات غير محسوم ${c.businessId}: ${c.table}.${c.field}`,
+        body: `سجّله الوكيل ${c.createdBy.id}${c.recordId ? ` على السجل ${c.recordId}` : ""}. القيم المتعارضة:\n${lines.join("\n")}\nيحتاج قرارك من الإعدادات → الحوكمة → تعارضات البيانات.`.slice(0, 1500),
+        severity: "WARNING",
+        relatedTable: "dataConflicts",
+        relatedRecordId: c._id,
+        createdAt: Date.now(),
+      });
+      created += 1;
+    }
+    return { created };
+  },
+});

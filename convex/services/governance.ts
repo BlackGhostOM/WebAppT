@@ -141,6 +141,19 @@ export async function recordConflict(
     createdAt: now,
   });
   await appendAudit(ctx, { actor, table: "dataConflicts", recordId: conflictId, businessId, event: "CREATE", newValue: { table: input.table, field: input.field, status: resolution ? "RESOLVED" : "ESCALATED", rule: resolution?.rule }, severity: "D2" });
+  if (!resolution) {
+    // An unresolved conflict is a decision only the owner can take: surface it as a notification with the candidates.
+    const lines = input.candidates.map((c, i) => `${i + 1}) ${typeof c.value === "string" ? c.value : JSON.stringify(c.value)} — ${c.trustLevel} — ${c.source.kind}${c.source.ref ? `: ${c.source.ref}` : ""}`);
+    await ctx.db.insert("notifications", {
+      kind: "DATA_CONFLICT",
+      title: `تعارض بيانات غير محسوم ${businessId}: ${input.table}.${input.field}`,
+      body: `سجّله الوكيل ${actor.id}${input.recordId ? ` على السجل ${input.recordId}` : ""}. القيم المتعارضة:\n${lines.join("\n")}\nيحتاج قرارك من الإعدادات → الحوكمة → تعارضات البيانات.`.slice(0, 1500),
+      severity: "WARNING",
+      relatedTable: "dataConflicts",
+      relatedRecordId: conflictId,
+      createdAt: now,
+    });
+  }
   return { conflictId, resolved: !!resolution, rule: resolution?.rule, value: resolution?.winner.value };
 }
 

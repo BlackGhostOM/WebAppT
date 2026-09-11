@@ -3,14 +3,14 @@
 import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { APPROVAL_KINDS, FOLLOW_UP_KINDS } from "@/convex/lib/vocab";
 import type { ar } from "@/lib/i18n/ar";
-import { AgentBadge, SeverityBadge, StatusBadge } from "@/components/badges";
-import { EmptyState, JsonView, PageHeader } from "@/components/page-header";
+import { AgentBadge, SeverityBadge, StatusBadge, TrustBadge } from "@/components/badges";
+import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -710,13 +710,52 @@ function GovernanceTab() {
   const memories = useQuery(api.dataQuality.memoryProposals);
   const notifications = useQuery(api.settings.notifications);
   const dismissGap = useMutation(api.dataQuality.dismissGap);
-  const resolveConflict = useMutation(api.dataQuality.resolveConflict);
   const decideMemory = useMutation(api.dataQuality.decideMemory);
   const markRead = useMutation(api.settings.markNotificationRead);
   const ensure = useMutation(api.bootstrap.ensure);
+
+  // Deep links from the bell carry a section hash; scroll to it once the tab has rendered.
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) return;
+    const el = document.getElementById(hash);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
+      <Card id="conflicts" className="scroll-mt-20 lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-base">
+            تعارضات بيانات غير محسومة {conflicts ? `(${conflicts.escalated.length})` : ""}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            سجّلها وكيل عندما وجد قيمتين متعارضتين لنفس الحقل ولم تحسمها قواعد الأولوية (السلطة ← الحداثة ← التحديد ← التعاقد ← التحقق). قرارك يُسجَّل في التدقيق؛ وإن أردت تغيير قيمة السجل نفسه فافتحه من رابطه.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {conflicts?.escalated.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
+          {conflicts?.escalated.map((c) => <ConflictCard key={c._id} conflict={c} />)}
+          {conflicts && conflicts.resolved.length > 0 && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">تعارضات محسومة ({conflicts.resolved.length})</summary>
+              <div className="mt-2 space-y-1">
+                {conflicts.resolved.map((c) => (
+                  <div key={c._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
+                    <span>
+                      <span className="font-mono">{c.businessId}</span> · {c.record.href ? <Link href={c.record.href} className="underline-offset-4 hover:underline">{c.record.label}</Link> : c.record.label} · <span dir="ltr">{c.field}</span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      {labelOf(c.resolutionRule, locale)} → {typeof c.resolvedValue === "string" ? c.resolvedValue : JSON.stringify(c.resolvedValue)} · {c.resolvedBy?.type === "owner" ? "المالك" : "آلياً"} · {formatDate(c.resolvedAt, locale, true)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </CardContent>
+      </Card>
+      <Card id="notifications" className="scroll-mt-20">
         <CardHeader>
           <CardTitle className="text-base">{t.dashboard.notifications}</CardTitle>
         </CardHeader>
@@ -724,11 +763,12 @@ function GovernanceTab() {
           {notifications?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
           {notifications?.map((n) => (
             <div key={n._id} className="flex items-start justify-between gap-2 rounded-md border p-2">
-              <div>
+              <div className="min-w-0">
                 <div className="font-medium">{n.title}</div>
-                <div className="text-xs text-muted-foreground">{n.body}</div>
+                <div className="whitespace-pre-wrap text-xs text-muted-foreground">{n.body}</div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{formatDate(n.createdAt, locale, true)}</div>
               </div>
-              <Button size="xs" variant="ghost" onClick={() => markRead({ notificationId: n._id })}>
+              <Button size="xs" variant="ghost" aria-label={t.attention.markRead} onClick={() => markRead({ notificationId: n._id })}>
                 ✓
               </Button>
             </div>
@@ -738,9 +778,11 @@ function GovernanceTab() {
           </Button>
         </CardContent>
       </Card>
-      <Card>
+      <Card id="gaps" className="scroll-mt-20">
         <CardHeader>
-          <CardTitle className="text-base">فجوات البيانات والمعرفة</CardTitle>
+          <CardTitle className="text-base">
+            فجوات البيانات والمعرفة {gaps ? `(${gaps.data.length + gaps.knowledge.length})` : ""}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {gaps?.data.map((g) => (
@@ -766,36 +808,11 @@ function GovernanceTab() {
           {gaps && gaps.data.length + gaps.knowledge.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
         </CardContent>
       </Card>
-      <Card>
+      <Card id="memories" className="scroll-mt-20">
         <CardHeader>
-          <CardTitle className="text-base">تعارضات بيانات مصعّدة</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {conflicts?.escalated.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
-          {conflicts?.escalated.map((c) => (
-            <div key={c._id} className="rounded-md border p-2">
-              <div className="font-medium" dir="ltr">
-                {c.table}.{c.field} {c.recordId ?? ""}
-              </div>
-              <div className="mt-1 space-y-1">
-                {c.candidates.map((cand, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 text-xs">
-                    <span>
-                      {JSON.stringify(cand.value)} · {labelOf(cand.trustLevel, locale)} · {cand.source.kind} {cand.source.ref ?? ""} · {formatDate(cand.observedAt, locale)}
-                    </span>
-                    <Button size="xs" variant="outline" onClick={() => resolveConflict({ conflictId: c._id, value: cand.value, reason: "owner_pick" }).then(() => toast.success(t.common.save))}>
-                      اعتماد هذه القيمة
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">اقتراحات ذاكرة بانتظار المراجعة</CardTitle>
+          <CardTitle className="text-base">
+            اقتراحات ذاكرة بانتظار المراجعة {memories ? `(${memories.length})` : ""}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {memories?.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
@@ -822,14 +839,119 @@ function GovernanceTab() {
               )}
             </div>
           ))}
-          {conflicts && conflicts.resolved.length > 0 && (
-            <details className="text-xs">
-              <summary className="cursor-pointer">تعارضات محسومة آلياً ({conflicts.resolved.length})</summary>
-              <JsonView value={conflicts.resolved.map((c) => ({ field: c.field, rule: c.resolutionRule, value: c.resolvedValue }))} />
-            </details>
-          )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+type ConflictRow = NonNullable<ReturnType<typeof useQuery<typeof api.dataQuality.conflicts>>>["escalated"][number];
+
+/** One escalated conflict: where it came from, the competing values, and the owner's decision controls. */
+function ConflictCard({ conflict: c }: { conflict: ConflictRow }) {
+  const { t, locale } = useT();
+  const resolveConflict = useMutation(api.dataQuality.resolveConflict);
+  const [custom, setCustom] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+  async function decide(value: unknown, why: string) {
+    setBusy(true);
+    try {
+      await resolveConflict({ conflictId: c._id, value, reason: why });
+      toast.success(t.common.save);
+    } catch (e) {
+      toast.error((e as { data?: { message?: string } }).data?.message ?? (e instanceof Error ? e.message : t.common.error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs">{c.businessId}</span>
+          <StatusBadge value={c.status} />
+          <span className="font-medium">
+            {c.record.href ? (
+              <Link href={c.record.href} className="text-primary underline-offset-4 hover:underline">
+                {c.record.label}
+              </Link>
+            ) : (
+              c.record.label
+            )}
+          </span>
+          <span className="text-muted-foreground" dir="ltr">
+            {c.table}.{c.field}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <AgentBadge slug={c.createdBy.id} />
+          {c.task && (
+            <Link href={`/tasks/${c.task._id}`} className="underline-offset-4 hover:underline">
+              {c.task.businessId} · {c.task.title}
+            </Link>
+          )}
+          <span>{formatDate(c.createdAt, locale, true)}</span>
+        </div>
+      </div>
+      <table className="w-full text-xs">
+        <thead className="text-muted-foreground">
+          <tr>
+            <th className="p-1 text-start">القيمة</th>
+            <th className="p-1 text-start">{t.common.trust}</th>
+            <th className="p-1 text-start">{t.common.source}</th>
+            <th className="p-1 text-start">رُصدت</th>
+            <th className="p-1 text-start"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {c.candidates.map((cand, i) => (
+            <tr key={i} className="border-t">
+              <td className="p-1 font-medium">{show(cand.value)}</td>
+              <td className="p-1">
+                <TrustBadge trustLevel={cand.trustLevel} />
+                {cand.contractual && " · تعاقدي"}
+              </td>
+              <td className="p-1 text-muted-foreground">
+                {cand.source.kind}
+                {cand.source.url ? (
+                  <>
+                    {" "}
+                    <a href={cand.source.url} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline" dir="ltr">
+                      {cand.source.url}
+                    </a>
+                  </>
+                ) : cand.source.ref ? (
+                  ` — ${cand.source.ref}`
+                ) : (
+                  ""
+                )}
+              </td>
+              <td className="p-1 whitespace-nowrap">{formatDate(cand.observedAt, locale, true)}</td>
+              <td className="p-1 text-end">
+                <Button size="xs" variant="outline" disabled={busy} onClick={() => decide(cand.value, `owner_pick:${i + 1}`)}>
+                  اعتماد هذه القيمة
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="قيمة أخرى (اختياري)">
+          <Input value={custom} onChange={(e) => setCustom(e.target.value)} className="w-40" dir="ltr" />
+        </Field>
+        <Field label={t.common.reason}>
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} className="w-64" />
+        </Field>
+        <Button size="sm" disabled={busy || !custom.trim() || !reason.trim()} onClick={() => decide(custom.trim(), reason.trim())}>
+          حسم بهذه القيمة
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy || !reason.trim()} onClick={() => decide(null, `not_a_conflict: ${reason.trim()}`)}>
+          ليس تعارضاً (إغلاق)
+        </Button>
+      </div>
     </div>
   );
 }

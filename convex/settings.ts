@@ -284,11 +284,11 @@ export const attention = query({
       { key: "pendingApprovals", count: await count(ctx.db.query("approvals").withIndex("by_status", (q) => q.eq("status", "PENDING")).take(500)), href: "/approvals", severity: "WARNING" as const },
       { key: "openMessages", count: (await inboundOpen("NEW")) + (await inboundOpen("REPLY_PROPOSED")) + (await inboundOpen("ESCALATED")), href: "/inbox", severity: "WARNING" as const },
       { key: "followUpsPending", count: await count(ctx.db.query("followUps").withIndex("by_status_dueAt", (q) => q.eq("status", "PENDING_APPROVAL")).take(500)), href: "/inbox?tab=FOLLOW_UPS", severity: "INFO" as const },
-      { key: "knowledgeGaps", count: await count(ctx.db.query("knowledgeGaps").withIndex("by_status", (q) => q.eq("status", "OPEN")).take(500)), href: "/settings?tab=governance", severity: "INFO" as const },
-      { key: "dataGaps", count: openGaps, href: "/settings?tab=governance", severity: "WARNING" as const },
-      { key: "conflicts", count: await count(ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).take(500)), href: "/settings?tab=governance", severity: "WARNING" as const },
-      { key: "memoryProposals", count: await count(ctx.db.query("memories").withIndex("by_status", (q) => q.eq("status", "PROPOSED")).take(500)), href: "/settings?tab=governance", severity: "INFO" as const },
-      { key: "unreadNotifications", count: unreadNotifications.length, href: "/settings?tab=governance", severity: unreadNotifications.some((n) => n.severity === "CRITICAL") ? ("CRITICAL" as const) : unreadNotifications.some((n) => n.severity === "WARNING") ? ("WARNING" as const) : ("INFO" as const) },
+      { key: "knowledgeGaps", count: await count(ctx.db.query("knowledgeGaps").withIndex("by_status", (q) => q.eq("status", "OPEN")).take(500)), href: "/settings?tab=governance#gaps", severity: "INFO" as const },
+      { key: "dataGaps", count: openGaps, href: "/settings?tab=governance#gaps", severity: "WARNING" as const },
+      { key: "conflicts", count: await count(ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).take(500)), href: "/settings?tab=governance#conflicts", severity: "WARNING" as const },
+      { key: "memoryProposals", count: await count(ctx.db.query("memories").withIndex("by_status", (q) => q.eq("status", "PROPOSED")).take(500)), href: "/settings?tab=governance#memories", severity: "INFO" as const },
+      { key: "unreadNotifications", count: unreadNotifications.length, href: "/settings?tab=governance#notifications", severity: unreadNotifications.some((n) => n.severity === "CRITICAL") ? ("CRITICAL" as const) : unreadNotifications.some((n) => n.severity === "WARNING") ? ("WARNING" as const) : ("INFO" as const) },
     ];
     const total = items.reduce((s, i) => s + i.count, 0);
     const highest = items.some((i) => i.count > 0 && i.severity === "CRITICAL") ? "CRITICAL" : items.some((i) => i.count > 0 && i.severity === "WARNING") ? "WARNING" : total > 0 ? "INFO" : "NONE";
