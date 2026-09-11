@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertCircleIcon, CheckCircle2Icon, CompassIcon, Loader2Icon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,8 @@ import { useT } from "@/lib/i18n";
  */
 export default function ContactPage() {
   const { t, locale, setLocale } = useT();
-  const [form, setForm] = useState({ name: "", phone: "", email: "", subject: "", message: "", website: "" });
+  const empty = { name: "", phone: "", email: "", subject: "", message: "", website: "" };
+  const [form, setForm] = useState(empty);
   const [state, setState] = useState<"idle" | "busy" | "sent" | "error" | "rate_limited" | "contact_required">("idle");
   const endpoint = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? ""}/api/contact`;
 
@@ -41,59 +43,140 @@ export default function ContactPage() {
     }
   }
 
+  const problem =
+    state === "contact_required" ? t.contact.contactRequired : state === "error" ? t.contact.failed : state === "rate_limited" ? t.contact.rateLimited : null;
+  const contactMissing = state === "contact_required";
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-lg">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background p-4">
+      <div className="mb-6 flex w-full max-w-lg items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm" aria-hidden>
+            <CompassIcon className="size-5" />
+          </span>
+          <span className="font-heading text-lg font-semibold">{t.appName}</span>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>
+          {locale === "ar" ? "English" : "العربية"}
+        </Button>
+      </div>
+      <Card className="w-full max-w-lg shadow-md">
         <CardHeader>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <CardTitle className="text-xl">{t.contact.title}</CardTitle>
-              <CardDescription>{t.contact.subtitle}</CardDescription>
-            </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>
-              {locale === "ar" ? "English" : "العربية"}
-            </Button>
-          </div>
+          <CardTitle className="text-xl">{t.contact.title}</CardTitle>
+          <CardDescription>{t.contact.subtitle}</CardDescription>
         </CardHeader>
         <CardContent>
           {state === "sent" ? (
-            <div className="rounded-lg border border-success/30 bg-success-soft p-4 text-sm text-success-text" role="status">
-              {t.contact.sent}
+            <div
+              role="status"
+              className="flex flex-col items-center gap-3 rounded-xl border border-success/30 bg-success-soft p-6 text-center text-sm text-success-text"
+            >
+              <CheckCircle2Icon className="size-8" aria-hidden />
+              <p className="leading-6">{t.contact.sent}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setForm(empty);
+                  setState("idle");
+                }}
+              >
+                {t.contact.sendAnother}
+              </Button>
             </div>
           ) : (
-            <form className="grid gap-3" onSubmit={onSubmit}>
-              <div className="grid gap-1">
-                <Label htmlFor="name">{t.contact.name}</Label>
-                <Input id="name" required minLength={2} maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />
+            <form className="grid gap-4" onSubmit={onSubmit}>
+              <div className="grid gap-1.5">
+                <Label htmlFor="name">
+                  {t.contact.name}{" "}
+                  <span className="text-destructive" aria-hidden>
+                    *
+                  </span>
+                </Label>
+                <Input
+                  id="name"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  autoComplete="name"
+                />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
                   <Label htmlFor="phone">{t.contact.phone}</Label>
-                  <Input id="phone" dir="ltr" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" placeholder="+968 9xxxxxxx" />
+                  <Input
+                    id="phone"
+                    dir="ltr"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    autoComplete="tel"
+                    placeholder="+968 9xxxxxxx"
+                    aria-invalid={contactMissing}
+                  />
                 </div>
-                <div className="grid gap-1">
+                <div className="grid gap-1.5">
                   <Label htmlFor="email">{t.contact.email}</Label>
-                  <Input id="email" dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+                  <Input
+                    id="email"
+                    dir="ltr"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    autoComplete="email"
+                    aria-invalid={contactMissing}
+                  />
                 </div>
+                <p className="text-xs text-hint sm:col-span-2">{t.contact.contactHint}</p>
               </div>
-              <div className="grid gap-1">
+              <div className="grid gap-1.5">
                 <Label htmlFor="subject">{t.contact.subject}</Label>
                 <Input id="subject" maxLength={200} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
               </div>
-              <div className="grid gap-1">
-                <Label htmlFor="message">{t.contact.message}</Label>
-                <Textarea id="message" required minLength={5} maxLength={5000} rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+              <div className="grid gap-1.5">
+                <Label htmlFor="message">
+                  {t.contact.message}{" "}
+                  <span className="text-destructive" aria-hidden>
+                    *
+                  </span>
+                </Label>
+                <Textarea
+                  id="message"
+                  required
+                  minLength={5}
+                  maxLength={5000}
+                  rows={5}
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                />
               </div>
               {/* Honeypot: hidden from people, filled by bots. */}
               <div className="hidden" aria-hidden="true">
                 <label htmlFor="website">Website</label>
-                <input id="website" name="website" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                <input
+                  id="website"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={form.website}
+                  onChange={(e) => setForm({ ...form, website: e.target.value })}
+                />
               </div>
-              {state === "contact_required" && <p className="text-sm text-destructive-text">{t.contact.contactRequired}</p>}
-              {state === "error" && <p className="text-sm text-destructive-text">{t.contact.failed}</p>}
-              {state === "rate_limited" && <p className="text-sm text-destructive-text">{t.contact.rateLimited}</p>}
-              <Button type="submit" disabled={state === "busy"}>
-                {t.contact.send}
+              {problem && (
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive-text"
+                >
+                  <AlertCircleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {problem}
+                </p>
+              )}
+              <Button type="submit" size="lg" disabled={state === "busy"} className="w-full sm:w-auto sm:self-end">
+                {state === "busy" ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                {state === "busy" ? t.common.loading : t.contact.send}
               </Button>
             </form>
           )}

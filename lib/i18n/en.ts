@@ -86,6 +86,9 @@ export const en: Dictionary = {
     passwordHint: "At least 12 characters with letters and digits",
     codeSent: "Code sent (in development it appears in the Convex logs)",
     signupClosed: "Public sign-up is closed; the owner adds users from Settings.",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
+    resetIntro: "Enter your e-mail and we will send a verification code to set a new password.",
   },
   dashboard: {
     inquiries: "Inquiries this month",
@@ -380,6 +383,8 @@ export const en: Dictionary = {
     contactRequired: "Please enter a phone number or an email address",
     failed: "The message could not be sent; please try again",
     rateLimited: "Too many messages in a short time; try again in a minute",
+    sendAnother: "Send another message",
+    contactHint: "Give at least a phone number or an e-mail so we can get back to you.",
   },
   settingsGroups: {
     agentsGroup: "Agents & models",
