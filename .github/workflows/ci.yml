@@ -1,0 +1,61 @@
+# Continuous integration for مركز العمليات.
+#
+# Runs on every push to main and on every pull request: type-check, lint,
+# the Vitest + convex-test suite (in-memory backend, mock LLM) and the
+# production Next.js build. No secrets are needed: the build falls back to the
+# public defaults in next.config.ts and the tests never call external services.
+#
+# Vercel deploys independently of this workflow; a red check here is the signal
+# to look before trusting the deployment. Moving deploys behind a green run
+# (Vercel CLI / `npx convex deploy` from this workflow) needs VERCEL_TOKEN and
+# CONVEX_DEPLOY_KEY as repository secrets — see docs/DEPLOY.md §10.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck · Lint · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: "1"
+      # The frontend build must not talk to Sentry in CI (no auth token → source-map upload is skipped anyway).
+      SENTRY_AUTH_TOKEN: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Test (Vitest + convex-test)
+        run: npm test
+
+      - name: Build (Next.js)
+        run: npm run build

@@ -1,5 +1,7 @@
 # مركز العمليات — Operations Center
 
+[![CI](https://github.com/BlackGhostOM/WebAppT/actions/workflows/ci.yml/badge.svg)](https://github.com/BlackGhostOM/WebAppT/actions/workflows/ci.yml)
+
 منصة ويب لشركة سياحية عُمانية تُدار عملياتها اليومية بأربعة وكلاء ذكاء اصطناعي (تنفيذي، منتجات، مبيعات، خدمة عملاء) ويعتمد المالك كل ما يمس المال أو العملاء أو السمعة.
 
 - الحزمة: Next.js 16 + TypeScript + Tailwind v4 + shadcn/ui · Convex (قاعدة البيانات، الدوال، cron، التخزين، البحث المتجهي) · Convex Auth (بريد + كلمة مرور) · Anthropic Claude API.

@@ -116,3 +116,11 @@ npx convex env remove OWNER_PASSWORD --prod
 4. تحقّق: افتح صفحة غير موجودة داخل التطبيق أو أوقف الشبكة أثناء مهمة وكيل؛ يجب أن يظهر الحدث في Sentry خلال ثوانٍ مع وسم `runtime` والبيئة (`production` / `prod`).
 
 ما لا يُرسل أبداً: كلمات المرور والرموز والمفاتيح، عناوين البريد، أرقام الهواتف (تُستبدل بـ`[redacted]`)، الكوكيز والرؤوس وأجسام الطلبات، ونصوص المحادثات. أخطاء التحقق والصلاحيات المتوقعة (`VALIDATION`, `FORBIDDEN`, …) تُستبعد لأنها جزء من التعامل الطبيعي مع الواجهة. لا تسجيل جلسات (Session Replay).
+
+## 10. التكامل المستمر (GitHub Actions)
+سير العمل `.github/workflows/ci.yml` يعمل على كل دفعة إلى `main` وكل طلب سحب، ويمكن تشغيله يدوياً من تبويب Actions. الخطوات: `npm ci` → `npm run typecheck` → `npm run lint` → `npm test` (Vitest + convex-test بخلفية في الذاكرة ونموذج محاكاة) → `npm run build`. لا يحتاج أي سر: البناء يستخدم القيم الافتراضية العامة في `next.config.ts`، والاختبارات لا تتصل بأي خدمة خارجية.
+
+- النتيجة تظهر كعلامة ✓/✗ بجانب كل التزام في GitHub وكشارة في `README.md`؛ GitHub يرسل بريداً عند فشل سير عمل على `main` (Settings → Notifications → Actions).
+- **Vercel ينشر بشكل مستقل** عن هذا الفحص: علامة ✗ تعني «راجع قبل أن تثق بالنشر الأخير»، وعند الحاجة أعد النشر السابق من لوحة Vercel (Deployments → ⋯ → Promote to Production).
+- لجعل النشر مشروطاً بنجاح الفحص لاحقاً: أوقف نشر Git التلقائي في Vercel وأضف خطوة نشر في السير (`vercel deploy --prod` مع `VERCEL_TOKEN`, و`npx convex deploy` مع `CONVEX_DEPLOY_KEY`) كأسرار مستودع (Settings → Secrets and variables → Actions). يُنصح بذلك بعد جعل المستودع خاصاً.
+- `npm run format:check` غير مضمّن حالياً لأن ملفات قديمة كثيرة غير منسّقة؛ بعد تشغيل `npm run format` مرة واحدة يمكن إضافته كخطوة.

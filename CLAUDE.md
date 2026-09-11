@@ -87,6 +87,8 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   https://github.com/BlackGhostOM/WebAppT.git. Build via `node scripts/vercel-build.mjs` (deploys Convex too when
   CONVEX_DEPLOY_KEY is set in Vercel, otherwise frontend-only against the defaults in next.config.ts — the current setup).
   Convex `SITE_URL` = https://webappt.vercel.app.
+- GitHub Actions (`.github/workflows/ci.yml`): typecheck, lint, tests and build on every push/PR to `main`; no secrets. Vercel
+  deploys independently — CI is a signal, not a gate (docs/DEPLOY.md §10 explains how to make it one).
 - To develop against a local anonymous backend again, swap the commented lines in `.env.local` and run
   `CONVEX_AGENT_MODE=anonymous npx convex dev`.
 
