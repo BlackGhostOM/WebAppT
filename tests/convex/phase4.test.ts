@@ -298,3 +298,27 @@ describe("Phase 4 — lifecycle follow-ups auto-approval end to end", () => {
     expect((await h.t.run(async (ctx) => ctx.db.get(reminder.approvalId!)))?.status).toBe("PENDING");
   });
 });
+
+describe("Phase 4 — attention badge", () => {
+  it("counts everything that needs the owner across tables, not just notifications", async () => {
+    const h = await setup();
+    const empty = await h.asOwner.query(api.settings.attention, {});
+    expect(empty.total).toBe(0);
+    expect(empty.highest).toBe("NONE");
+    await h.t.run(async (ctx) => {
+      await ctx.db.insert("knowledgeGaps", { businessId: "KGP-T1", question: "سياسة الإلغاء؟", normalizedQuestion: "سياسة الالغاء", askedBy: "product", occurrences: 1, lastAskedAt: Date.now(), taskIds: [], status: "OPEN", createdAt: Date.now() });
+      await ctx.db.insert("approvals", { businessId: "APR-T1", kind: "OTHER", status: "PENDING", agentSlug: "executive", title: "t", summary: "s", payload: {}, severity: "D3", requestedAt: Date.now() });
+      await ctx.db.insert("notifications", { kind: "DAILY_DIGEST", title: "ملخص", body: "b", severity: "INFO", createdAt: Date.now() });
+    });
+    const busy = await h.asOwner.query(api.settings.attention, {});
+    expect(busy.total).toBe(3);
+    expect(busy.highest).toBe("WARNING");
+    expect(busy.items.map((i) => i.key).sort()).toEqual(["knowledgeGaps", "pendingApprovals", "unreadNotifications"]);
+    expect(busy.latest).toHaveLength(1);
+    expect(await h.asOwner.mutation(api.settings.markAllNotificationsRead, {})).toBe(1);
+    const after = await h.asOwner.query(api.settings.attention, {});
+    expect(after.total).toBe(2);
+    expect(after.latest).toHaveLength(0);
+    await expect(h.t.query(api.settings.attention, {})).rejects.toThrow(/UNAUTHENTICATED|يجب تسجيل الدخول/);
+  });
+});

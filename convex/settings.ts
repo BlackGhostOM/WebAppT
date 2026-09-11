@@ -256,3 +256,42 @@ export const markNotificationRead = mutation({
     return null;
   },
 });
+
+export const markAllNotificationsRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const unread = await ctx.db.query("notifications").withIndex("by_unread", (q) => q.eq("readAt", undefined)).take(500);
+    const now = Date.now();
+    for (const n of unread) await ctx.db.patch(n._id, { readAt: now });
+    return unread.length;
+  },
+});
+
+/**
+ * Everything that needs the owner's attention right now, from every table the
+ * agents write to — not only the notifications table. Drives the bell badge.
+ */
+export const attention = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const count = async (rows: Promise<unknown[]>) => (await rows).length;
+    const inboundOpen = async (status: Doc<"interactions">["status"]) => (await ctx.db.query("interactions").withIndex("by_status", (q) => q.eq("status", status)).take(500)).filter((i) => i.direction === "INBOUND").length;
+    const unreadNotifications = await ctx.db.query("notifications").withIndex("by_unread", (q) => q.eq("readAt", undefined)).order("desc").take(50);
+    const openGaps = (await ctx.db.query("dataGaps").withIndex("by_status", (q) => q.eq("status", "OPEN")).take(500)).filter((g) => g.severity === "D3" || g.severity === "D4").length;
+    const items = [
+      { key: "pendingApprovals", count: await count(ctx.db.query("approvals").withIndex("by_status", (q) => q.eq("status", "PENDING")).take(500)), href: "/approvals", severity: "WARNING" as const },
+      { key: "openMessages", count: (await inboundOpen("NEW")) + (await inboundOpen("REPLY_PROPOSED")) + (await inboundOpen("ESCALATED")), href: "/inbox", severity: "WARNING" as const },
+      { key: "followUpsPending", count: await count(ctx.db.query("followUps").withIndex("by_status_dueAt", (q) => q.eq("status", "PENDING_APPROVAL")).take(500)), href: "/inbox?tab=FOLLOW_UPS", severity: "INFO" as const },
+      { key: "knowledgeGaps", count: await count(ctx.db.query("knowledgeGaps").withIndex("by_status", (q) => q.eq("status", "OPEN")).take(500)), href: "/settings?tab=governance", severity: "INFO" as const },
+      { key: "dataGaps", count: openGaps, href: "/settings?tab=governance", severity: "WARNING" as const },
+      { key: "conflicts", count: await count(ctx.db.query("dataConflicts").withIndex("by_status", (q) => q.eq("status", "ESCALATED")).take(500)), href: "/settings?tab=governance", severity: "WARNING" as const },
+      { key: "memoryProposals", count: await count(ctx.db.query("memories").withIndex("by_status", (q) => q.eq("status", "PROPOSED")).take(500)), href: "/settings?tab=governance", severity: "INFO" as const },
+      { key: "unreadNotifications", count: unreadNotifications.length, href: "/settings?tab=governance", severity: unreadNotifications.some((n) => n.severity === "CRITICAL") ? ("CRITICAL" as const) : unreadNotifications.some((n) => n.severity === "WARNING") ? ("WARNING" as const) : ("INFO" as const) },
+    ];
+    const total = items.reduce((s, i) => s + i.count, 0);
+    const highest = items.some((i) => i.count > 0 && i.severity === "CRITICAL") ? "CRITICAL" : items.some((i) => i.count > 0 && i.severity === "WARNING") ? "WARNING" : total > 0 ? "INFO" : "NONE";
+    return { total, highest, items: items.filter((i) => i.count > 0), latest: unreadNotifications.slice(0, 8) };
+  },
+});

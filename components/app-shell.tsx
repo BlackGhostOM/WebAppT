@@ -4,7 +4,6 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
 import {
   BarChart3Icon,
-  BellIcon,
   BookOpenIcon,
   CalendarIcon,
   CheckSquareIcon,
@@ -24,6 +23,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { NotificationBell } from "@/components/notification-bell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -53,7 +53,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const me = useQuery(api.settings.me);
   const pending = useQuery(api.approvals.pending);
   const emergency = useQuery(api.tasks.emergencyStatus);
-  const notifications = useQuery(api.settings.notifications);
   const activate = useMutation(api.tasks.activateEmergencyStop);
   const deactivate = useMutation(api.tasks.deactivateEmergencyStop);
   const [stopOpen, setStopOpen] = useState(false);
@@ -116,10 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {t.chat.stopAll}
             </Button>
           )}
-          <Link href="/settings?tab=governance" className="relative inline-flex size-8 items-center justify-center rounded-lg hover:bg-muted" aria-label={t.dashboard.notifications}>
-            <BellIcon className="size-4" />
-            {notifications && notifications.length > 0 && <span className="absolute -top-0.5 -end-0.5 size-2 rounded-full bg-destructive" />}
-          </Link>
+          <NotificationBell />
           <Button variant="ghost" size="sm" onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>
             {locale === "ar" ? "EN" : "ع"}
           </Button>
