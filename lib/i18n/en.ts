@@ -136,6 +136,12 @@ export const en: Dictionary = {
     confirmStopAll: "This stops every running and scheduled task and blocks new ones until you resume manually. Continue?",
     emergencyActive: "Emergency stop is active — no new tasks start",
     premium: "Use a premium model for this task",
+    premiumHint: "more accurate and more expensive; for complex tasks only",
+    enterHint: "Enter to send · Shift+Enter for a new line",
+    you: "You",
+    agent: "Executive agent",
+    conversations: "Conversations",
+    emptyTitle: "Start a conversation with the executive agent",
   },
   approvals: {
     title: "Approval inbox",
