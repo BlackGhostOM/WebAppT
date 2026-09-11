@@ -101,6 +101,8 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   stop and agent enablement, and audits one SYSTEM row per run. Model-backed jobs create tasks with origin `system`
   (requestedBy `cron:<job>`); `runtime.completeTask` notifies the owner for those.
 - Reports are pure read models in `services/reports.ts`; never store computed KPIs.
+- The header bell uses `settings.attention` (all owner queues + unread notifications, highest severity); add new
+  owner-facing queues there, not as ad-hoc dots.
 
 ## Agent loop guards (learned in production)
 - Web search: provider blocks are kept verbatim (`raw`) so page content survives tool calls; `webSearchMaxUses` (settings,
