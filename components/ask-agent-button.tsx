@@ -45,7 +45,9 @@ export function AskAgentButton({ label, template, description }: { label: string
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
-            <DialogDescription>{description ?? "يستقبل الوكيل التنفيذي الطلب ويوزّعه على الوكيل المختص؛ كل ما يمس المال أو العملاء يعود إليك للاعتماد."}</DialogDescription>
+            <DialogDescription>
+              {description ?? "يستقبل الوكيل التنفيذي الطلب ويوزّعه على الوكيل المختص؛ كل ما يمس المال أو العملاء يعود إليك للاعتماد."}
+            </DialogDescription>
           </DialogHeader>
           <Textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} />
           <DialogFooter>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
+import { AlertCircleIcon, CompassIcon, Loader2Icon, MailCheckIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -51,44 +52,95 @@ export default function ResetPasswordPage() {
     }
   }
 
+  const errorBox = error && (
+    <p role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive-text">
+      <AlertCircleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      {error}
+    </p>
+  );
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-sm">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background p-4">
+      <div className="mb-6 flex items-center gap-3">
+        <span className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm" aria-hidden>
+          <CompassIcon className="size-6" />
+        </span>
+        <div className="font-heading text-xl font-semibold">{t.appName}</div>
+      </div>
+      <Card className="w-full max-w-sm shadow-md">
         <CardHeader>
-          <CardTitle className="text-xl">{t.auth.resetTitle}</CardTitle>
-          <CardDescription>{t.auth.passwordHint}</CardDescription>
+          <CardTitle className="text-lg">{t.auth.resetTitle}</CardTitle>
+          <CardDescription>{step === "request" ? t.auth.resetIntro : t.auth.passwordHint}</CardDescription>
         </CardHeader>
         <CardContent>
           {step === "request" ? (
-            <form onSubmit={request} className="flex flex-col gap-4">
+            <form onSubmit={request} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="email">{t.auth.email}</Label>
-                <Input id="email" type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  id="email"
+                  type="email"
+                  dir="ltr"
+                  required
+                  autoFocus
+                  className="h-10"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={!!error}
+                />
               </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" disabled={busy} className="w-full">
+              {errorBox}
+              <Button type="submit" size="lg" disabled={busy} className="w-full">
+                {busy ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
                 {t.auth.resetSend}
               </Button>
             </form>
           ) : (
-            <form onSubmit={verify} className="flex flex-col gap-4">
-              {message && <p className="text-sm text-muted-foreground">{message}</p>}
+            <form onSubmit={verify} className="flex flex-col gap-5">
+              {message && (
+                <p role="status" className="flex items-start gap-2 rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-sm text-success-text">
+                  <MailCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {message}
+                </p>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="code">{t.auth.resetCode}</Label>
-                <Input id="code" inputMode="numeric" dir="ltr" required value={code} onChange={(e) => setCode(e.target.value)} />
+                <Input
+                  id="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  required
+                  autoFocus
+                  className="h-10 font-mono tracking-widest"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="newPassword">{t.auth.newPassword}</Label>
-                <Input id="newPassword" type="password" dir="ltr" required minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  dir="ltr"
+                  required
+                  minLength={12}
+                  className="h-10"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <p className="text-xs text-hint">{t.auth.passwordHint}</p>
               </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" disabled={busy} className="w-full">
+              {errorBox}
+              <Button type="submit" size="lg" disabled={busy} className="w-full">
+                {busy ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
                 {t.auth.resetConfirm}
               </Button>
             </form>
           )}
-          <p className="mt-4 text-sm">
-            <Link href="/login" className="text-primary underline-offset-4 hover:underline">
+          <p className="mt-5 text-center text-sm">
+            <Link href="/login" className="text-primary-text underline-offset-4 hover:underline">
               {t.auth.backToLogin}
             </Link>
           </p>

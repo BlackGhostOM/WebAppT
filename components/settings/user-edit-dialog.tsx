@@ -67,7 +67,7 @@ export function UserEditDialog({ user, onClose }: { user: EditableUser | null; o
           <div className="grid gap-1">
             <Label>{t.auth.email}</Label>
             <Input type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <p className="text-[11px] text-muted-foreground">{t.settings.emailChangeHint}</p>
+            <p className="text-xs text-hint">{t.settings.emailChangeHint}</p>
           </div>
           <div className="grid gap-1">
             <Label>{t.settings.userPhone}</Label>
