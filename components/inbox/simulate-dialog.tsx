@@ -68,7 +68,11 @@ export function SimulateInboundDialog({ onCreated }: { onCreated?: (interactionI
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1">
                 <Label>القناة</Label>
-                <Select value={form.channel} onValueChange={(v) => setForm({ ...form, channel: String(v ?? "INSTAGRAM") })} items={CHANNELS.map((c) => ({ value: c, label: labelOf(c, locale) }))}>
+                <Select
+                  value={form.channel}
+                  onValueChange={(v) => setForm({ ...form, channel: String(v ?? "INSTAGRAM") })}
+                  items={CHANNELS.map((c) => ({ value: c, label: labelOf(c, locale) }))}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>

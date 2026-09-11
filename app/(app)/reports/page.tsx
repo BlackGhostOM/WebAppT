@@ -9,6 +9,7 @@ import { AgentBadge, StatusBadge } from "@/components/badges";
 import { BarChart, BreakdownBars, downloadCsv, LineChart } from "@/components/charts";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate, formatNumber, formatPercent, formatUsd } from "@/lib/format";
@@ -17,17 +18,7 @@ import { labelOf, useT } from "@/lib/i18n";
 const TABS = ["overview", "support", "agents", "cost", "bookings"] as const;
 
 function Stat({ label, value, hint, warn }: { label: string; value: string; hint?: string; warn?: boolean }) {
-  return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-semibold tabular-nums ${warn ? "text-destructive" : ""}`}>{value}</div>
-        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
-      </CardContent>
-    </Card>
-  );
+  return <StatCard label={label} value={value} hint={hint} tone={warn ? "warn" : "default"} />;
 }
 
 function Section({ title, children, onExport }: { title: string; children: React.ReactNode; onExport?: () => void }) {
@@ -35,7 +26,7 @@ function Section({ title, children, onExport }: { title: string; children: React
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         {onExport && (
           <Button size="xs" variant="outline" onClick={onExport}>
             <DownloadIcon data-icon="inline-start" /> {t.reports.exportCsv}
@@ -62,7 +53,7 @@ export default function ReportsPage() {
         title={t.nav.reports}
         description={t.reports.description}
         actions={
-          <Link href="/settings?tab=scheduled" className="text-xs text-primary underline-offset-4 hover:underline">
+          <Link href="/settings?tab=scheduled" className="text-xs text-primary-text underline-offset-4 hover:underline">
             {t.settings.scheduled} ←
           </Link>
         }
@@ -92,7 +83,8 @@ function OverviewTab({ locale }: { locale: "ar" | "en" }) {
   const points = data.points;
   const last = points[points.length - 1];
   const prev = points[points.length - 2];
-  const delta = (a: number, b: number | undefined) => (b === undefined || b === 0 ? "" : `${a >= b ? "▲" : "▼"} ${formatPercent(Math.abs(((a - b) / b) * 100))}`);
+  const delta = (a: number, b: number | undefined) =>
+    b === undefined || b === 0 ? "" : `${a >= b ? "▲" : "▼"} ${formatPercent(Math.abs(((a - b) / b) * 100))}`;
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
@@ -105,7 +97,10 @@ function OverviewTab({ locale }: { locale: "ar" | "en" }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title={`${t.reports.trend} — ${t.reports.months6}`} onExport={() => downloadCsv("monthly-series.csv", points)}>
           <BarChart
-            data={points.map((p) => ({ label: shortMonth(p.monthKey), values: { inquiries: p.inquiries, newLeads: p.newLeads, quotes: p.quotes, bookings: p.bookings, wonLeads: p.wonLeads } }))}
+            data={points.map((p) => ({
+              label: shortMonth(p.monthKey),
+              values: { inquiries: p.inquiries, newLeads: p.newLeads, quotes: p.quotes, bookings: p.bookings, wonLeads: p.wonLeads },
+            }))}
             series={[
               { key: "inquiries", name: t.reports.inquiries },
               { key: "newLeads", name: t.reports.leads },
@@ -119,29 +114,33 @@ function OverviewTab({ locale }: { locale: "ar" | "en" }) {
           <LineChart points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.revenueOmr }))} formatValue={(n) => formatNumber(n, 0)} />
         </Section>
         <Section title={t.reports.costTrend}>
-          <LineChart points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.agentCostUsd }))} color="var(--chart-4)" formatValue={(n) => `$${formatNumber(n, 1)}`} />
+          <LineChart
+            points={points.map((p) => ({ label: shortMonth(p.monthKey), value: p.agentCostUsd }))}
+            color="var(--chart-4)"
+            formatValue={(n) => `$${formatNumber(n, 1)}`}
+          />
         </Section>
         <Section title={t.dashboard.conversion}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm [&_tbody_tr]:border-t [&_tbody_tr:nth-child(even)]:bg-secondary/30">
             <thead className="text-xs text-muted-foreground">
               <tr>
-                <th className="p-1 text-start">{t.reports.month}</th>
-                <th className="p-1 text-start">{t.reports.inquiries}</th>
-                <th className="p-1 text-start">{t.reports.leads}</th>
-                <th className="p-1 text-start">{t.reports.quotes}</th>
-                <th className="p-1 text-start">{t.reports.bookings}</th>
-                <th className="p-1 text-start">{t.reports.won}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.month}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.inquiries}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.leads}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.quotes}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.bookings}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.won}</th>
               </tr>
             </thead>
             <tbody>
               {points.map((p) => (
                 <tr key={p.monthKey} className="border-t">
-                  <td className="p-1 font-mono text-xs">{p.monthKey}</td>
-                  <td className="p-1 tabular-nums">{p.inquiries}</td>
-                  <td className="p-1 tabular-nums">{p.newLeads}</td>
-                  <td className="p-1 tabular-nums">{p.quotes}</td>
-                  <td className="p-1 tabular-nums">{p.bookings}</td>
-                  <td className="p-1 tabular-nums">{p.wonLeads}</td>
+                  <td className="h-11 px-3 font-mono text-xs">{p.monthKey}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.inquiries}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.newLeads}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.quotes}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.bookings}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.wonLeads}</td>
                 </tr>
               ))}
             </tbody>
@@ -160,12 +159,30 @@ function SupportTab({ locale }: { locale: "ar" | "en" }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Stat label={`${t.reports.inquiries} (${t.reports.days30})`} value={formatNumber(r.inbound)} hint={`${t.inbox.outbound}: ${formatNumber(r.outbound)}`} />
-        <Stat label={`${t.reports.responseTime} · ${t.reports.median}`} value={minutes(r.medianResponseMinutes)} hint={`${t.reports.avg} ${minutes(r.avgResponseMinutes)} · ${t.reports.p90} ${minutes(r.p90ResponseMinutes)}`} warn={(r.medianResponseMinutes ?? 0) > 120} />
+        <Stat
+          label={`${t.reports.inquiries} (${t.reports.days30})`}
+          value={formatNumber(r.inbound)}
+          hint={`${t.inbox.outbound}: ${formatNumber(r.outbound)}`}
+        />
+        <Stat
+          label={`${t.reports.responseTime} · ${t.reports.median}`}
+          value={minutes(r.medianResponseMinutes)}
+          hint={`${t.reports.avg} ${minutes(r.avgResponseMinutes)} · ${t.reports.p90} ${minutes(r.p90ResponseMinutes)}`}
+          warn={(r.medianResponseMinutes ?? 0) > 120}
+        />
         <Stat label={t.reports.escalationRate} value={formatPercent(r.escalationRatePercent)} hint={`${r.escalated}/${r.classified}`} />
         <Stat label={t.reports.complaints} value={formatNumber(r.complaints)} warn={r.complaints > 0} />
-        <Stat label={t.reports.autoShare} value={formatPercent(r.messageApprovals.autoSharePercent)} hint={`${r.messageApprovals.auto}/${r.messageApprovals.decided}`} />
-        <Stat label={t.reports.overrideRate} value={formatPercent(r.messageApprovals.overrideRatePercent)} hint={`${t.common.reject} ${r.messageApprovals.rejected} · ${t.common.edit} ${r.messageApprovals.edited}`} warn={(r.messageApprovals.overrideRatePercent ?? 0) > 30} />
+        <Stat
+          label={t.reports.autoShare}
+          value={formatPercent(r.messageApprovals.autoSharePercent)}
+          hint={`${r.messageApprovals.auto}/${r.messageApprovals.decided}`}
+        />
+        <Stat
+          label={t.reports.overrideRate}
+          value={formatPercent(r.messageApprovals.overrideRatePercent)}
+          hint={`${t.common.reject} ${r.messageApprovals.rejected} · ${t.common.edit} ${r.messageApprovals.edited}`}
+          warn={(r.messageApprovals.overrideRatePercent ?? 0) > 30}
+        />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title={t.reports.byChannel} onExport={() => downloadCsv("support-by-channel.csv", toEntries(r.byChannel, locale))}>
@@ -202,49 +219,61 @@ function AgentsTab({ locale }: { locale: "ar" | "en" }) {
   const r = useQuery(api.reports.agents, {});
   if (!r) return <div className="text-sm text-muted-foreground">{t.common.loading}</div>;
   return (
-    <Section title={`${t.reports.agentsTab} — ${r.monthKey}`} onExport={() => downloadCsv(`agents-${r.monthKey}.csv`, r.rows.map((x) => ({ ...x, byOrigin: JSON.stringify(x.byOrigin), approvals: JSON.stringify(x.approvals) })))}>
+    <Section
+      title={`${t.reports.agentsTab} — ${r.monthKey}`}
+      onExport={() =>
+        downloadCsv(
+          `agents-${r.monthKey}.csv`,
+          r.rows.map((x) => ({ ...x, byOrigin: JSON.stringify(x.byOrigin), approvals: JSON.stringify(x.approvals) })),
+        )
+      }
+    >
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-xs text-muted-foreground">
+        <table className="w-full text-sm [&_tbody_tr]:border-t [&_tbody_tr:nth-child(even)]:bg-secondary/30">
+          <thead className="bg-secondary text-xs text-muted-foreground">
             <tr>
-              <th className="p-2 text-start">{t.reports.agent}</th>
-              <th className="p-2 text-start">{t.reports.tasks}</th>
-              <th className="p-2 text-start">{t.reports.completed}</th>
-              <th className="p-2 text-start">{t.reports.failed}</th>
-              <th className="p-2 text-start">{t.reports.cancelled}</th>
-              <th className="p-2 text-start">{t.reports.active}</th>
-              <th className="p-2 text-start">{t.reports.avgSteps}</th>
-              <th className="p-2 text-start">{t.reports.avgCost}</th>
-              <th className="p-2 text-start">{t.reports.avgDuration}</th>
-              <th className="p-2 text-start">{t.reports.unsupported}</th>
-              <th className="p-2 text-start">{t.reports.approvals}</th>
-              <th className="p-2 text-start">{t.reports.overrideRate}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.agent}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.tasks}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.completed}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.failed}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.cancelled}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.active}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.avgSteps}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.avgCost}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.avgDuration}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.unsupported}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.approvals}</th>
+              <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.overrideRate}</th>
             </tr>
           </thead>
           <tbody>
             {r.rows.map((x) => (
               <tr key={x.agentSlug} className="border-t">
-                <td className="p-2">
+                <td className="h-11 px-3">
                   <AgentBadge slug={x.agentSlug} />
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {Object.entries(x.byOrigin)
                       .map(([o, n]) => `${labelOf(o, locale)} ${n}`)
                       .join(" · ")}
                   </div>
                 </td>
-                <td className="p-2 tabular-nums">{x.tasks}</td>
-                <td className="p-2 tabular-nums">{x.completed}</td>
-                <td className={`p-2 tabular-nums ${x.failed > 0 ? "text-destructive" : ""}`}>{x.failed}</td>
-                <td className="p-2 tabular-nums">{x.cancelled}</td>
-                <td className="p-2 tabular-nums">{x.active}</td>
-                <td className="p-2 tabular-nums">{x.avgSteps ?? "—"}</td>
-                <td className="p-2 tabular-nums">{x.avgCostUsd === null ? "—" : formatUsd(x.avgCostUsd)}</td>
-                <td className="p-2 tabular-nums">{x.avgDurationMinutes ?? "—"}</td>
-                <td className={`p-2 tabular-nums ${(x.unsupportedFactRatePercent ?? 0) > 20 ? "text-destructive" : ""}`}>{formatPercent(x.unsupportedFactRatePercent)}</td>
-                <td className="p-2 tabular-nums">
+                <td className="h-11 px-3 tabular-nums">{x.tasks}</td>
+                <td className="h-11 px-3 tabular-nums">{x.completed}</td>
+                <td className={`h-11 px-3 tabular-nums ${x.failed > 0 ? "text-destructive-text" : ""}`}>{x.failed}</td>
+                <td className="h-11 px-3 tabular-nums">{x.cancelled}</td>
+                <td className="h-11 px-3 tabular-nums">{x.active}</td>
+                <td className="h-11 px-3 tabular-nums">{x.avgSteps ?? "—"}</td>
+                <td className="h-11 px-3 tabular-nums">{x.avgCostUsd === null ? "—" : formatUsd(x.avgCostUsd)}</td>
+                <td className="h-11 px-3 tabular-nums">{x.avgDurationMinutes ?? "—"}</td>
+                <td className={`h-11 px-3 tabular-nums ${(x.unsupportedFactRatePercent ?? 0) > 20 ? "text-destructive-text" : ""}`}>
+                  {formatPercent(x.unsupportedFactRatePercent)}
+                </td>
+                <td className="h-11 px-3 tabular-nums">
                   {x.approvals.requested} / {x.approvals.rejected} / {x.approvals.edited}
                 </td>
-                <td className={`p-2 tabular-nums ${(x.approvals.overrideRatePercent ?? 0) > 30 ? "text-destructive" : ""}`}>{formatPercent(x.approvals.overrideRatePercent)}</td>
+                <td className={`h-11 px-3 tabular-nums ${(x.approvals.overrideRatePercent ?? 0) > 30 ? "text-destructive-text" : ""}`}>
+                  {formatPercent(x.approvals.overrideRatePercent)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -262,28 +291,49 @@ function CostTab() {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <Stat label={`${t.dashboard.agentCost} · ${r.monthKey}`} value={formatUsd(r.totalUsd)} hint={`${formatPercent(r.percentOfBudget)} ${t.reports.budget} ${formatUsd(r.budgetUsd)}`} />
-        <Stat label={t.reports.projected} value={formatUsd(r.projectedUsd)} hint={`${formatPercent(r.projectedPercentOfBudget)} · ${r.daysElapsed}/${r.daysInMonth}`} warn={over} />
+        <Stat
+          label={`${t.dashboard.agentCost} · ${r.monthKey}`}
+          value={formatUsd(r.totalUsd)}
+          hint={`${formatPercent(r.percentOfBudget)} ${t.reports.budget} ${formatUsd(r.budgetUsd)}`}
+        />
+        <Stat
+          label={t.reports.projected}
+          value={formatUsd(r.projectedUsd)}
+          hint={`${formatPercent(r.projectedPercentOfBudget)} · ${r.daysElapsed}/${r.daysInMonth}`}
+          warn={over}
+        />
         <Stat label={t.reports.escalatedCalls} value={formatNumber(r.escalatedCalls)} hint={formatUsd(r.escalatedCostUsd)} />
         <Stat label={t.reports.cacheShare} value={formatPercent(r.cacheReadSharePercent)} />
         <Stat label={t.reports.webSearches} value={formatNumber(r.webSearchRequests)} hint={formatUsd(r.webSearchRequests * 0.01)} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title={t.reports.dailyCost} onExport={() => downloadCsv(`cost-${r.monthKey}.csv`, r.byDay)}>
-          <LineChart points={r.byDay.slice(0, r.daysElapsed).map((d) => ({ label: String(d.day), value: d.costUsd }))} color="var(--chart-4)" formatValue={(n) => `$${formatNumber(n, 2)}`} reference={r.budgetUsd > 0 ? { value: r.budgetUsd / r.daysInMonth, label: `${t.reports.budget}/يوم` } : undefined} />
+          <LineChart
+            points={r.byDay.slice(0, r.daysElapsed).map((d) => ({ label: String(d.day), value: d.costUsd }))}
+            color="var(--chart-4)"
+            formatValue={(n) => `$${formatNumber(n, 2)}`}
+            reference={r.budgetUsd > 0 ? { value: r.budgetUsd / r.daysInMonth, label: `${t.reports.budget}/يوم` } : undefined}
+          />
         </Section>
         <Section title={t.reports.byOrigin}>
-          <BreakdownBars items={Object.entries(r.byOrigin).map(([k, v]) => ({ label: `${k} (${v.calls})`, value: v.costUsd }))} formatValue={(n) => formatUsd(n)} />
+          <BreakdownBars
+            items={Object.entries(r.byOrigin).map(([k, v]) => ({ label: `${k} (${v.calls})`, value: v.costUsd }))}
+            formatValue={(n) => formatUsd(n)}
+          />
         </Section>
         <Section title={t.reports.byModel}>
-          <BreakdownBars items={r.byModel.map((m) => ({ label: `${m.model} (${m.calls})`, value: m.costUsd }))} formatValue={(n) => formatUsd(n)} color="var(--chart-1)" />
+          <BreakdownBars
+            items={r.byModel.map((m) => ({ label: `${m.model} (${m.calls})`, value: m.costUsd }))}
+            formatValue={(n) => formatUsd(n)}
+            color="var(--chart-1)"
+          />
         </Section>
         <Section title={t.reports.byAgent}>
           <div className="space-y-1 text-sm">
             {r.byAgent.map((a) => (
               <div key={a.agentSlug} className="flex items-center justify-between">
                 <AgentBadge slug={a.agentSlug} />
-                <span className={`tabular-nums ${a.percentOfBudget >= 80 ? "text-destructive" : ""}`}>
+                <span className={`tabular-nums ${a.percentOfBudget >= 80 ? "text-destructive-text" : ""}`}>
                   {formatUsd(a.costUsd)} / {formatUsd(a.budgetUsd)} ({formatPercent(a.percentOfBudget)})
                 </span>
               </div>
@@ -311,25 +361,39 @@ function BookingsTab({ locale }: { locale: "ar" | "en" }) {
           <BreakdownBars items={toEntries(r.byStatus, locale)} />
         </Section>
         <Section title={t.reports.departures}>
-          <BarChart data={r.departuresByMonth.map((d) => ({ label: shortMonth(d.monthKey), values: { departures: d.departures, pax: d.pax } }))} series={[{ key: "departures", name: t.reports.departures }, { key: "pax", name: t.reports.pax }]} />
+          <BarChart
+            data={r.departuresByMonth.map((d) => ({ label: shortMonth(d.monthKey), values: { departures: d.departures, pax: d.pax } }))}
+            series={[
+              { key: "departures", name: t.reports.departures },
+              { key: "pax", name: t.reports.pax },
+            ]}
+          />
         </Section>
         <Section title={t.reports.byProduct} onExport={() => downloadCsv("bookings-by-product.csv", r.byProduct)}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm [&_tbody_tr]:border-t [&_tbody_tr:nth-child(even)]:bg-secondary/30">
             <thead className="text-xs text-muted-foreground">
               <tr>
-                <th className="p-1 text-start">{t.reports.byProduct}</th>
-                <th className="p-1 text-start">{t.reports.bookings}</th>
-                <th className="p-1 text-start">{t.reports.pax}</th>
-                <th className="p-1 text-start">{t.dashboard.revenue}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.byProduct}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.bookings}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.reports.pax}</th>
+                <th className="h-10 px-3 text-start text-xs font-medium text-muted-foreground">{t.dashboard.revenue}</th>
               </tr>
             </thead>
             <tbody>
               {r.byProduct.map((p) => (
                 <tr key={p.productId ?? "none"} className="border-t">
-                  <td className="p-1">{p.productId ? <Link href={`/products/${p.productId}`} className="underline-offset-4 hover:underline">{p.name}</Link> : p.name}</td>
-                  <td className="p-1 tabular-nums">{p.bookings}</td>
-                  <td className="p-1 tabular-nums">{p.pax}</td>
-                  <td className="p-1 tabular-nums">{formatNumber(p.revenueOmr, 3)}</td>
+                  <td className="h-11 px-3">
+                    {p.productId ? (
+                      <Link href={`/products/${p.productId}`} className="underline-offset-4 hover:underline">
+                        {p.name}
+                      </Link>
+                    ) : (
+                      p.name
+                    )}
+                  </td>
+                  <td className="h-11 px-3 tabular-nums">{p.bookings}</td>
+                  <td className="h-11 px-3 tabular-nums">{p.pax}</td>
+                  <td className="h-11 px-3 tabular-nums">{formatNumber(p.revenueOmr, 3)}</td>
                 </tr>
               ))}
             </tbody>

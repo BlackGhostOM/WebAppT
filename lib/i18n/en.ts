@@ -354,6 +354,17 @@ export const en: Dictionary = {
     pax: "Pax",
     month: "Month",
   },
+  pipeline: {
+    openValue: "Open expected value (OMR)",
+    staleLeads: "Leads silent for 7 days",
+    overdueFollowUps: "Overdue follow-ups",
+    quoteToBooking: "Conversion: quote → booking",
+    stale: "stale",
+    followUp: "Follow-up",
+    quotes: "Quotes",
+    lostReasons: "Lost reasons",
+    priceWarnings: "price warning(s)",
+  },
   attention: {
     title: "Needs your attention",
     empty: "Nothing waiting for you right now",

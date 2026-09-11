@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/badges";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { LeadDialog } from "@/components/pipeline/lead-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/stat-card";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { labelOf, useT } from "@/lib/i18n";
 
@@ -28,7 +28,10 @@ export default function PipelinePage() {
         description="العملاء المحتملون حسب المرحلة، والعروض التجارية المبنية على منتجات فعّالة فقط، وتقرير التحويل من قاعدة البيانات."
         actions={
           <>
-            <AskAgentButton label="اطلب من وكيل المبيعات" template="راجع خط المبيعات: حدّد العملاء الراكدين والمتابعات المتأخرة، واقترح رسالة متابعة لكل منهم بلغته، وأعدّ عروضاً للمؤهلين من المنتجات الفعّالة، وقدّم تقرير التحويل لهذا الشهر." />
+            <AskAgentButton
+              label="اطلب من وكيل المبيعات"
+              template="راجع خط المبيعات: حدّد العملاء الراكدين والمتابعات المتأخرة، واقترح رسالة متابعة لكل منهم بلغته، وأعدّ عروضاً للمؤهلين من المنتجات الفعّالة، وقدّم تقرير التحويل لهذا الشهر."
+            />
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/data/leads?new=1" />}>
               {t.data.newRecord}
             </Button>
@@ -37,31 +40,15 @@ export default function PipelinePage() {
       />
 
       {report && (
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs text-muted-foreground">القيمة المتوقعة المفتوحة (ر.ع)</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold tabular-nums">{formatNumber(report.totalOpenExpectedValueOmr, 0)}</CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs text-muted-foreground">عملاء بلا تواصل منذ 7 أيام</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold tabular-nums">{report.staleLeads.length}</CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs text-muted-foreground">متابعات متأخرة</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold tabular-nums">{report.overdueFollowUps.length}</CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs text-muted-foreground">التحويل: عرض ← حجز</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold tabular-nums">{formatPercent(report.conversion.quoteToBookingPercent)}</CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label={t.pipeline.openValue} value={formatNumber(report.totalOpenExpectedValueOmr, 0)} tone="primary" />
+          <StatCard label={t.pipeline.staleLeads} value={formatNumber(report.staleLeads.length)} tone={report.staleLeads.length > 0 ? "warn" : "default"} />
+          <StatCard
+            label={t.pipeline.overdueFollowUps}
+            value={formatNumber(report.overdueFollowUps.length)}
+            tone={report.overdueFollowUps.length > 0 ? "warn" : "default"}
+          />
+          <StatCard label={t.pipeline.quoteToBooking} value={formatPercent(report.conversion.quoteToBookingPercent)} />
         </div>
       )}
 
@@ -70,23 +57,32 @@ export default function PipelinePage() {
           const column = (data?.leads ?? []).filter((l) => l.stage === s);
           const stale = new Set(report?.staleLeads.map((l) => l._id) ?? []);
           return (
-            <div key={s} className="rounded-lg border bg-muted/30 p-2">
+            <div key={s} className="rounded-xl border border-border bg-secondary/50 p-2">
               <div className="mb-2 flex items-center justify-between px-1">
                 <StatusBadge value={s} />
                 <span className="text-xs text-muted-foreground">{column.length}</span>
               </div>
               <div className="space-y-2">
                 {column.map((lead) => (
-                  <button key={lead._id} type="button" onClick={() => setSelected(lead._id)} className="block w-full rounded-md border bg-background p-2 text-start text-sm hover:bg-muted">
+                  <button
+                    key={lead._id}
+                    type="button"
+                    onClick={() => setSelected(lead._id)}
+                    className="block w-full rounded-lg border border-border bg-card p-3 text-start text-sm shadow-xs transition-colors hover:bg-accent/60"
+                  >
                     <div className="flex items-center justify-between gap-1">
                       <span className="font-medium">{lead.contactName}</span>
-                      {stale.has(lead._id) && <span className="text-[10px] text-destructive">راكد</span>}
+                      {stale.has(lead._id) && <span className="text-xs font-medium text-warning-text">{t.pipeline.stale}</span>}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {labelOf(lead.channel, locale)} · {formatMoney(lead.expectedValue, locale)}
                     </div>
-                    {lead.nextFollowUpAt && <div className={`text-[10px] ${lead.nextFollowUpAt < Date.now() ? "text-destructive" : "text-muted-foreground"}`}>متابعة: {formatDate(lead.nextFollowUpAt, locale)}</div>}
-                    {lead.lostReason && <div className="text-[10px] text-destructive">{lead.lostReason}</div>}
+                    {lead.nextFollowUpAt && (
+                      <div className={`text-xs ${lead.nextFollowUpAt < Date.now() ? "text-destructive-text" : "text-muted-foreground"}`}>
+                        {t.pipeline.followUp}: {formatDate(lead.nextFollowUpAt, locale)}
+                      </div>
+                    )}
+                    {lead.lostReason && <div className="text-xs text-destructive-text">{lead.lostReason}</div>}
                   </button>
                 ))}
               </div>
@@ -96,11 +92,16 @@ export default function PipelinePage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-base font-medium">العروض التجارية</h2>
+        <h2 className="mb-2 font-heading text-base font-semibold">{t.pipeline.quotes}</h2>
         {data?.quotes.length === 0 && <EmptyState>{t.common.empty}</EmptyState>}
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {data?.quotes.map((q) => (
-            <button key={q._id} type="button" onClick={() => setSelected(q.leadId)} className="rounded-md border p-2 text-start text-sm hover:bg-muted">
+            <button
+              key={q._id}
+              type="button"
+              onClick={() => setSelected(q.leadId)}
+              className="rounded-lg border border-border bg-card p-3 text-start text-sm shadow-xs transition-colors hover:bg-accent/60"
+            >
               <div className="flex items-center justify-between">
                 <span className="font-medium">{q.businessId}</span>
                 <StatusBadge value={q.status} />
@@ -109,7 +110,11 @@ export default function PipelinePage() {
                 V{q.version} · منتج {q.productVersion ?? "—"} · حتى {formatDate(q.validUntil, locale)}
               </div>
               <div className="mt-1 tabular-nums">{formatMoney(q.totals.customerSellingPrice, locale)}</div>
-              {q.priceWarnings.length > 0 && <div className="mt-1 text-xs text-warning-text">⚠️ {q.priceWarnings.length} تحذير سعر</div>}
+              {q.priceWarnings.length > 0 && (
+                <div className="mt-1 text-xs text-warning-text">
+                  ⚠️ {q.priceWarnings.length} {t.pipeline.priceWarnings}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -117,7 +122,7 @@ export default function PipelinePage() {
 
       {report && Object.keys(report.lostReasons).length > 0 && (
         <section className="text-sm">
-          <h2 className="mb-1 text-base font-medium">أسباب الخسارة</h2>
+          <h2 className="mb-1 font-heading text-base font-semibold">{t.pipeline.lostReasons}</h2>
           <div className="flex flex-wrap gap-2">
             {Object.entries(report.lostReasons).map(([reason, count]) => (
               <span key={reason} className="rounded-md border px-2 py-1 text-xs">

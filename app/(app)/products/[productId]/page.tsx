@@ -32,7 +32,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Picker({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; placeholder?: string }) {
+function Picker({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  placeholder?: string;
+}) {
   return (
     <Select value={value || null} onValueChange={(v) => onChange(String(v ?? ""))} items={options.map((o) => ({ value: o.id, label: o.label }))}>
       <SelectTrigger className="w-full">
@@ -62,7 +72,18 @@ export default function ProductDetailPage() {
   const updateRecord = useMutation(api.records.update);
   const [componentOpen, setComponentOpen] = useState(false);
   const [dayOpen, setDayOpen] = useState<number | null>(null);
-  const [comp, setComp] = useState({ componentType: "HOTEL", description: "", dayNumber: "", quantity: "1", unit: "PER_NIGHT", supplierId: "", hotelId: "", rateId: "", supplierCost: "", customerSellingPrice: "" });
+  const [comp, setComp] = useState({
+    componentType: "HOTEL",
+    description: "",
+    dayNumber: "",
+    quantity: "1",
+    unit: "PER_NIGHT",
+    supplierId: "",
+    hotelId: "",
+    rateId: "",
+    supplierCost: "",
+    customerSellingPrice: "",
+  });
   const [day, setDay] = useState({ title: "", description: "", destinationId: "", overnightHotelId: "", breakfast: true, lunch: false, dinner: false });
 
   if (data === undefined) return <div className="text-sm text-muted-foreground">{t.common.loading}</div>;
@@ -126,7 +147,16 @@ export default function ProductDetailPage() {
               {t.common.edit}
             </Button>
             {editable && nextStatuses.length > 0 && (
-              <Select value={null} onValueChange={(v) => v && updateRecord({ entity: "products", id: product._id, data: { status: String(v) } }).then(() => toast.success(labelOf(String(v), locale))).catch((e) => toast.error(e.data?.message ?? e.message))} items={nextStatuses.map((s) => ({ value: s, label: labelOf(s, locale) }))}>
+              <Select
+                value={null}
+                onValueChange={(v) =>
+                  v &&
+                  updateRecord({ entity: "products", id: product._id, data: { status: String(v) } })
+                    .then(() => toast.success(labelOf(String(v), locale)))
+                    .catch((e) => toast.error(e.data?.message ?? e.message))
+                }
+                items={nextStatuses.map((s) => ({ value: s, label: labelOf(s, locale) }))}
+              >
                 <SelectTrigger size="sm" className="w-44">
                   <SelectValue placeholder="الانتقال إلى مرحلة…" />
                 </SelectTrigger>
@@ -140,31 +170,51 @@ export default function ProductDetailPage() {
               </Select>
             )}
             {product.status === "READY_FOR_SALE" && (
-              <Button size="sm" onClick={() => activate({ productId: product._id }).then(() => toast.success(labelOf("ACTIVE", locale))).catch((e) => toast.error(e.data?.message ?? e.message))}>
+              <Button
+                size="sm"
+                onClick={() =>
+                  activate({ productId: product._id })
+                    .then(() => toast.success(labelOf("ACTIVE", locale)))
+                    .catch((e) => toast.error(e.data?.message ?? e.message))
+                }
+              >
                 تفعيل للبيع
               </Button>
             )}
             {product.status === "ACTIVE" && (
               <>
-                <Button size="sm" variant="secondary" onClick={() => newVersion({ productId: product._id, kind: "minor" }).then((r) => toast.success(`V${r.version}`))}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => newVersion({ productId: product._id, kind: "minor" }).then((r) => toast.success(`V${r.version}`))}
+                >
                   إصدار فرعي V+0.1
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => newVersion({ productId: product._id, kind: "major" }).then((r) => toast.success(`V${r.version}`))}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => newVersion({ productId: product._id, kind: "major" }).then((r) => toast.success(`V${r.version}`))}
+                >
                   إصدار رئيسي V+1
                 </Button>
               </>
             )}
-            <AskAgentButton label="اطلب من وكيل المنتجات" template={`راجع المنتج ${product.businessId} (${product.name} V${product.version}): تحقق من المكوّنات والأسعار، وابحث عن بدائل أفضل سعراً مع مصادر موثقة، وحدّث البرنامج اليومي إن لزم، وقدّم ملخصاً بالهامش.`} />
+            <AskAgentButton
+              label="اطلب من وكيل المنتجات"
+              template={`راجع المنتج ${product.businessId} (${product.name} V${product.version}): تحقق من المكوّنات والأسعار، وابحث عن بدائل أفضل سعراً مع مصادر موثقة، وحدّث البرنامج اليومي إن لزم، وقدّم ملخصاً بالهامش.`}
+            />
           </>
         }
       />
       {estimatedComponents > 0 && (
-        <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-text">⚠️ {estimatedComponents} مكوّن بسعر استرشادي (ESTIMATED) — يحتاج تأكيداً من المورد قبل استخدامه في عرض للعميل. أكّد الأسعار من صفحة الباقات.</div>
+        <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-text">
+          ⚠️ {estimatedComponents} مكوّن بسعر استرشادي (ESTIMATED) — يحتاج تأكيداً من المورد قبل استخدامه في عرض للعميل. أكّد الأسعار من صفحة الباقات.
+        </div>
       )}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">المكوّنات</CardTitle>
+            <CardTitle>المكوّنات</CardTitle>
             {editable && (
               <Button size="sm" variant="outline" onClick={() => setComponentOpen(true)}>
                 إضافة مكوّن
@@ -199,11 +249,13 @@ export default function ProductDetailPage() {
                     <TableCell>
                       <TrustBadge trustLevel={c.trustLevel} rateTrust={c.rateTrust} freshness={c.rate?.freshness} />
                       {c.rate?.source.url && (
-                        <a href={c.rate.source.url} target="_blank" rel="noreferrer" className="ms-1 text-xs text-primary underline" dir="ltr">
+                        <a href={c.rate.source.url} target="_blank" rel="noreferrer" className="ms-1 text-xs text-primary-text underline" dir="ltr">
                           المصدر
                         </a>
                       )}
-                      {c.rate?.source.retrievedAt && <span className="ms-1 text-[10px] text-muted-foreground">{formatDate(c.rate.source.retrievedAt, locale, true)}</span>}
+                      {c.rate?.source.retrievedAt && (
+                        <span className="ms-1 text-xs text-muted-foreground">{formatDate(c.rate.source.retrievedAt, locale, true)}</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {editable && (
@@ -227,7 +279,7 @@ export default function ProductDetailPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">التسعير (للفرد)</CardTitle>
+            <CardTitle>التسعير (للفرد)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {(["supplierCost", "internalCost", "minSellingPrice", "recommendedSellingPrice", "customerSellingPrice"] as const).map((k) => (
@@ -278,7 +330,7 @@ export default function ProductDetailPage() {
       </div>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">البرنامج اليومي</CardTitle>
+          <CardTitle>البرنامج اليومي</CardTitle>
           {editable && (
             <div className="flex flex-wrap gap-1">
               {Array.from({ length: product.durationDays }, (_, i) => i + 1).map((n) => {
@@ -289,7 +341,15 @@ export default function ProductDetailPage() {
                     size="xs"
                     variant={existing ? "outline" : "secondary"}
                     onClick={() => {
-                      setDay({ title: existing?.title ?? "", description: existing?.description ?? "", destinationId: existing?.destinationId ?? "", overnightHotelId: existing?.overnightHotelId ?? "", breakfast: existing?.meals.breakfast ?? true, lunch: existing?.meals.lunch ?? false, dinner: existing?.meals.dinner ?? false });
+                      setDay({
+                        title: existing?.title ?? "",
+                        description: existing?.description ?? "",
+                        destinationId: existing?.destinationId ?? "",
+                        overnightHotelId: existing?.overnightHotelId ?? "",
+                        breakfast: existing?.meals.breakfast ?? true,
+                        lunch: existing?.meals.lunch ?? false,
+                        dinner: existing?.meals.dinner ?? false,
+                      });
                       setDayOpen(n);
                     }}
                   >
@@ -326,7 +386,11 @@ export default function ProductDetailPage() {
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="النوع">
-              <Picker value={comp.componentType} onChange={(v) => setComp({ ...comp, componentType: v })} options={COMPONENT_TYPES.map((c) => ({ id: c, label: c }))} />
+              <Picker
+                value={comp.componentType}
+                onChange={(v) => setComp({ ...comp, componentType: v })}
+                options={COMPONENT_TYPES.map((c) => ({ id: c, label: c }))}
+              />
             </Field>
             <Field label="الوحدة">
               <Picker value={comp.unit} onChange={(v) => setComp({ ...comp, unit: v })} options={RATE_BASES.map((c) => ({ id: c, label: c }))} />
@@ -346,11 +410,21 @@ export default function ProductDetailPage() {
               <Picker value={comp.supplierId} onChange={(v) => setComp({ ...comp, supplierId: v })} options={pickers?.suppliers ?? []} />
             </Field>
             <Field label="الفندق">
-              <Picker value={comp.hotelId} onChange={(v) => setComp({ ...comp, hotelId: v })} options={(pickers?.hotels ?? []).filter((h) => !comp.supplierId || h.supplierId === comp.supplierId)} />
+              <Picker
+                value={comp.hotelId}
+                onChange={(v) => setComp({ ...comp, hotelId: v })}
+                options={(pickers?.hotels ?? []).filter((h) => !comp.supplierId || h.supplierId === comp.supplierId)}
+              />
             </Field>
             <div className="sm:col-span-2">
               <Field label="السعر المرتبط (يملأ تكلفة المورد ويحمل مستوى ثقته)">
-                <Picker value={comp.rateId} onChange={(v) => setComp({ ...comp, rateId: v })} options={(pickers?.rates ?? []).filter((r) => (!comp.supplierId || r.supplierId === comp.supplierId) && (!comp.hotelId || r.hotelId === comp.hotelId || !r.hotelId))} />
+                <Picker
+                  value={comp.rateId}
+                  onChange={(v) => setComp({ ...comp, rateId: v })}
+                  options={(pickers?.rates ?? []).filter(
+                    (r) => (!comp.supplierId || r.supplierId === comp.supplierId) && (!comp.hotelId || r.hotelId === comp.hotelId || !r.hotelId),
+                  )}
+                />
               </Field>
             </div>
             <Field label="تكلفة المورد (ر.ع، اختياري)">

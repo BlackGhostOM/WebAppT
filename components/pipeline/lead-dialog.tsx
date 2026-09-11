@@ -19,7 +19,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatMoney } from "@/lib/format";
 import { labelOf, useT } from "@/lib/i18n";
 
-function Picker({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; placeholder?: string }) {
+function Picker({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  placeholder?: string;
+}) {
   return (
     <Select value={value || null} onValueChange={(v) => onChange(String(v ?? ""))} items={options.map((o) => ({ value: o.id, label: o.label }))}>
       <SelectTrigger className="w-full">
@@ -63,7 +73,10 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
             <span>{lead?.contactName ?? t.common.loading}</span>
             {lead && (
               <span className="flex items-center gap-1 text-xs">
-                <StatusBadge value={lead.stage} /> <span className="font-mono text-muted-foreground" dir="ltr">{lead.businessId}</span>
+                <StatusBadge value={lead.stage} />{" "}
+                <span className="font-mono text-muted-foreground" dir="ltr">
+                  {lead.businessId}
+                </span>
               </span>
             )}
           </DialogTitle>
@@ -101,7 +114,7 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
                   <>
                     <dt className="text-muted-foreground">سجل العميل</dt>
                     <dd>
-                      <Link href={`/data/customers?id=${data.customer._id}`} className="text-primary underline-offset-4 hover:underline">
+                      <Link href={`/data/customers?id=${data.customer._id}`} className="text-primary-text underline-offset-4 hover:underline">
                         {data.customer.fullName} ({data.customer.businessId})
                       </Link>{" "}
                       · موافقة {labelOf(data.customer.consentStatus, locale)}
@@ -109,11 +122,11 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
                   </>
                 )}
               </dl>
-              {lead.summary && <div className="rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">{lead.summary}</div>}
+              {lead.summary && <div className="rounded-lg bg-secondary p-2 text-xs whitespace-pre-wrap">{lead.summary}</div>}
               {data && data.approvals.length > 0 && (
                 <div className="rounded-lg border border-warning/40 bg-warning-soft p-2 text-xs text-warning-text">
                   بانتظار اعتمادك: {data.approvals.map((a) => a.title).join("؛ ")} —{" "}
-                  <Link href="/approvals" className="text-primary underline">
+                  <Link href="/approvals" className="text-primary-text underline">
                     {t.approvals.title}
                   </Link>
                 </div>
@@ -121,7 +134,12 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
               <div className="grid gap-2 sm:grid-cols-3">
                 <div className="flex flex-col gap-1.5">
                   <Label>المرحلة الجديدة</Label>
-                  <Picker value={stage} onChange={setStage} options={LEAD_TRANSITIONS[lead.stage].map((s) => ({ id: s, label: labelOf(s, locale) }))} placeholder={labelOf(lead.stage, locale)} />
+                  <Picker
+                    value={stage}
+                    onChange={setStage}
+                    options={LEAD_TRANSITIONS[lead.stage].map((s) => ({ id: s, label: labelOf(s, locale) }))}
+                    placeholder={labelOf(lead.stage, locale)}
+                  />
                 </div>
                 {stage === "LOST" && (
                   <div className="flex flex-col gap-1.5">
@@ -173,7 +191,14 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
                   {(q.status === "DRAFT" || q.status === "APPROVED") && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Picker value={sendChannel} onChange={setSendChannel} options={CHANNELS.map((c) => ({ id: c, label: labelOf(c, locale) }))} />
-                      <Button size="xs" onClick={() => sendQuote({ quoteId: q._id, channel: sendChannel, message: `نرسل لكم عرض السعر ${q.businessId}` }).then(() => toast.success("أُرسل العرض (محاكاة)")).catch((e) => toast.error(errMsg(e, t.common.error)))}>
+                      <Button
+                        size="xs"
+                        onClick={() =>
+                          sendQuote({ quoteId: q._id, channel: sendChannel, message: `نرسل لكم عرض السعر ${q.businessId}` })
+                            .then(() => toast.success("أُرسل العرض (محاكاة)"))
+                            .catch((e) => toast.error(errMsg(e, t.common.error)))
+                        }
+                      >
                         إرسال العرض الآن
                       </Button>
                     </div>
@@ -184,17 +209,37 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
                 <div className="mb-2 text-xs font-medium">عرض جديد (من منتج فعّال فقط)</div>
                 <div className="grid gap-2 sm:grid-cols-4">
                   <div className="sm:col-span-2">
-                    <Picker value={quote.productId} onChange={(v) => setQuote({ ...quote, productId: v })} options={(data?.activeProducts ?? []).map((p) => ({ id: p._id, label: `${p.name} V${p.version} — ${formatMoney(p.customerSellingPrice, locale)}` }))} placeholder="اختر منتجاً فعّالاً" />
+                    <Picker
+                      value={quote.productId}
+                      onChange={(v) => setQuote({ ...quote, productId: v })}
+                      options={(data?.activeProducts ?? []).map((p) => ({
+                        id: p._id,
+                        label: `${p.name} V${p.version} — ${formatMoney(p.customerSellingPrice, locale)}`,
+                      }))}
+                      placeholder="اختر منتجاً فعّالاً"
+                    />
                   </div>
                   <Input type="number" dir="ltr" placeholder="الأفراد" value={quote.pax} onChange={(e) => setQuote({ ...quote, pax: e.target.value })} />
-                  <Input type="number" dir="ltr" placeholder="خصم %" value={quote.discount} onChange={(e) => setQuote({ ...quote, discount: e.target.value })} />
+                  <Input
+                    type="number"
+                    dir="ltr"
+                    placeholder="خصم %"
+                    value={quote.discount}
+                    onChange={(e) => setQuote({ ...quote, discount: e.target.value })}
+                  />
                 </div>
                 <Button
                   size="sm"
                   className="mt-2"
                   disabled={!quote.productId}
                   onClick={() =>
-                    createQuote({ leadId: lead._id, productId: quote.productId as Id<"products">, pax: Number(quote.pax) || 1, discountPercent: quote.discount ? Number(quote.discount) : undefined, validDays: Number(quote.validDays) || 7 })
+                    createQuote({
+                      leadId: lead._id,
+                      productId: quote.productId as Id<"products">,
+                      pax: Number(quote.pax) || 1,
+                      discountPercent: quote.discount ? Number(quote.discount) : undefined,
+                      validDays: Number(quote.validDays) || 7,
+                    })
                       .then((r) => toast.success(`${r.businessId}${r.warnings.length ? ` — ${r.warnings.length} تحذير` : ""}`))
                       .catch((e) => toast.error(errMsg(e, t.common.error)))
                   }
@@ -207,10 +252,11 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
             <TabsContent value="messages" className="space-y-3 pt-3 text-sm">
               {data?.interactions.length === 0 && <EmptyState>لا رسائل مسجّلة.</EmptyState>}
               {data?.interactions.map((i) => (
-                <div key={i._id} className={`rounded-md border p-2 ${i.direction === "OUTBOUND" ? "bg-muted/40" : ""}`}>
+                <div key={i._id} className={`rounded-md border p-2 ${i.direction === "OUTBOUND" ? "bg-secondary/60" : ""}`}>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
-                      {i.direction === "INBOUND" ? "وارد" : i.direction === "OUTBOUND" ? "صادر" : "ملاحظة"} · {labelOf(i.channel, locale)} {i.kind ? `· ${labelOf(i.kind, locale)}` : ""}
+                      {i.direction === "INBOUND" ? "وارد" : i.direction === "OUTBOUND" ? "صادر" : "ملاحظة"} · {labelOf(i.channel, locale)}{" "}
+                      {i.kind ? `· ${labelOf(i.kind, locale)}` : ""}
                     </span>
                     <span>{formatDate(i.receivedAt, locale, true)}</span>
                   </div>
@@ -220,8 +266,20 @@ export function LeadDialog({ leadId, onClose }: { leadId: Id<"leads"> | null; on
               <div className="rounded-md border border-dashed p-3">
                 <div className="mb-2 text-xs font-medium">تسجيل رسالة (واردة من العميل أو صادرة أرسلتها بنفسك)</div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Picker value={message.channel} onChange={(v) => setMessage({ ...message, channel: v })} options={CHANNELS.map((c) => ({ id: c, label: labelOf(c, locale) }))} />
-                  <Picker value={message.direction} onChange={(v) => setMessage({ ...message, direction: v })} options={[{ id: "INBOUND", label: "واردة" }, { id: "OUTBOUND", label: "صادرة" }, { id: "INTERNAL_NOTE", label: "ملاحظة داخلية" }]} />
+                  <Picker
+                    value={message.channel}
+                    onChange={(v) => setMessage({ ...message, channel: v })}
+                    options={CHANNELS.map((c) => ({ id: c, label: labelOf(c, locale) }))}
+                  />
+                  <Picker
+                    value={message.direction}
+                    onChange={(v) => setMessage({ ...message, direction: v })}
+                    options={[
+                      { id: "INBOUND", label: "واردة" },
+                      { id: "OUTBOUND", label: "صادرة" },
+                      { id: "INTERNAL_NOTE", label: "ملاحظة داخلية" },
+                    ]}
+                  />
                 </div>
                 <Textarea className="mt-2" rows={3} value={message.body} onChange={(e) => setMessage({ ...message, body: e.target.value })} />
                 <Button

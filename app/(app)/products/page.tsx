@@ -38,7 +38,7 @@ function ConfirmRateDialog({ rate, onClose }: { rate: ProposedRate | null; onClo
           <DialogTitle>تأكيد سعر استرشادي {rate.businessId}</DialogTitle>
           <DialogDescription>
             {rate.serviceDescription} — {formatMoney(rate.amount, locale)} · المصدر:{" "}
-            <a href={rate.source.url} target="_blank" rel="noreferrer" className="text-primary underline" dir="ltr">
+            <a href={rate.source.url} target="_blank" rel="noreferrer" className="text-primary-text underline" dir="ltr">
               {rate.source.url}
             </a>{" "}
             · رُصد {formatDate(rate.source.retrievedAt, locale, true)}
@@ -47,7 +47,14 @@ function ConfirmRateDialog({ rate, onClose }: { rate: ProposedRate | null; onClo
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label>مستوى الثقة بعد التأكيد</Label>
-            <Select value={trust} onValueChange={(v) => setTrust((v as typeof trust) ?? "SUPPLIER_CONFIRMED")} items={[{ value: "SUPPLIER_CONFIRMED", label: labelOf("SUPPLIER_CONFIRMED", locale) }, { value: "CONTRACTED", label: labelOf("CONTRACTED", locale) }]}>
+            <Select
+              value={trust}
+              onValueChange={(v) => setTrust((v as typeof trust) ?? "SUPPLIER_CONFIRMED")}
+              items={[
+                { value: "SUPPLIER_CONFIRMED", label: labelOf("SUPPLIER_CONFIRMED", locale) },
+                { value: "CONTRACTED", label: labelOf("CONTRACTED", locale) },
+              ]}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -132,7 +139,7 @@ export default function ProductsPage() {
       {proposed && proposed.length > 0 && (
         <Card className="border-warning/40 bg-warning-soft">
           <CardHeader>
-            <CardTitle className="text-base">أسعار استرشادية من بحث الوكلاء بانتظار تأكيدك ({proposed.length})</CardTitle>
+            <CardTitle>أسعار استرشادية من بحث الوكلاء بانتظار تأكيدك ({proposed.length})</CardTitle>
             <p className="text-xs text-muted-foreground">كل سعر هنا موسوم ESTIMATED مع رابط المصدر ووقت الرصد؛ لا يدخل عرضاً للعميل قبل تأكيد المورد.</p>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
@@ -142,7 +149,7 @@ export default function ProductsPage() {
                   <div className="truncate font-medium">{r.serviceDescription}</div>
                   <div className="text-xs text-muted-foreground">
                     {r.businessId} · {formatMoney(r.amount, locale)} · {labelOf(r.season, locale)} ·{" "}
-                    <a href={r.source.url} target="_blank" rel="noreferrer" className="text-primary underline" dir="ltr">
+                    <a href={r.source.url} target="_blank" rel="noreferrer" className="text-primary-text underline" dir="ltr">
                       المصدر
                     </a>{" "}
                     · {formatDate(r.source.retrievedAt, locale, true)}
@@ -184,14 +191,17 @@ export default function ProductsPage() {
               </TableRow>
             )}
             {rows?.map((p) => {
-              const r = p as Record<string, unknown> & { pricing?: { customerSellingPrice?: { amount: number; currency: string } }; margin?: { marginPercent: number | null } };
+              const r = p as Record<string, unknown> & {
+                pricing?: { customerSellingPrice?: { amount: number; currency: string } };
+                margin?: { marginPercent: number | null };
+              };
               return (
                 <TableRow key={String(r._id)}>
                   <TableCell className="font-mono text-xs" dir="ltr">
                     {String(r.businessId)}
                   </TableCell>
                   <TableCell>
-                    <Link href={`/products/${String(r._id)}`} className="font-medium text-primary underline-offset-4 hover:underline">
+                    <Link href={`/products/${String(r._id)}`} className="font-medium text-primary-text underline-offset-4 hover:underline">
                       {String(r.name)}
                     </Link>
                   </TableCell>

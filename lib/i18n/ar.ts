@@ -352,6 +352,17 @@ export const ar = {
     pax: "الأفراد",
     month: "الشهر",
   },
+  pipeline: {
+    openValue: "القيمة المتوقعة المفتوحة (ر.ع)",
+    staleLeads: "عملاء بلا تواصل منذ 7 أيام",
+    overdueFollowUps: "متابعات متأخرة",
+    quoteToBooking: "التحويل: عرض ← حجز",
+    stale: "راكد",
+    followUp: "متابعة",
+    quotes: "العروض التجارية",
+    lostReasons: "أسباب الخسارة",
+    priceWarnings: "تحذير سعر",
+  },
   attention: {
     title: "يحتاج انتباهك",
     empty: "لا شيء ينتظرك الآن",

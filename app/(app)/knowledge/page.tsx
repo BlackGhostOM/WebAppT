@@ -34,14 +34,51 @@ interface UploadMeta {
   validTo?: number;
 }
 
-const DEFAULT_META: UploadMeta = { title: "", documentType: "POLICY", domain: "CORPORATE_HR_ADMIN", language: "ar", classification: "INTERNAL", allowedAgents: [...AGENT_SLUGS], relatedTable: "", relatedRecordId: "" };
+const DEFAULT_META: UploadMeta = {
+  title: "",
+  documentType: "POLICY",
+  domain: "CORPORATE_HR_ADMIN",
+  language: "ar",
+  classification: "INTERNAL",
+  allowedAgents: [...AGENT_SLUGS],
+  relatedTable: "",
+  relatedRecordId: "",
+};
 
-function UploadDialog({ open, onOpenChange, supersedes }: { open: boolean; onOpenChange: (o: boolean) => void; supersedes?: { _id: Id<"documents">; title: string; documentType: string; domain: string; classification: string; allowedAgents: string[]; language: "ar" | "en" } }) {
+function UploadDialog({
+  open,
+  onOpenChange,
+  supersedes,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  supersedes?: {
+    _id: Id<"documents">;
+    title: string;
+    documentType: string;
+    domain: string;
+    classification: string;
+    allowedAgents: string[];
+    language: "ar" | "en";
+  };
+}) {
   const { t, locale } = useT();
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const register = useMutation(api.documents.register);
   const [file, setFile] = useState<File | null>(null);
-  const [meta, setMeta] = useState<UploadMeta>(supersedes ? { ...DEFAULT_META, title: supersedes.title, documentType: supersedes.documentType, domain: supersedes.domain, classification: supersedes.classification, allowedAgents: supersedes.allowedAgents, language: supersedes.language } : DEFAULT_META);
+  const [meta, setMeta] = useState<UploadMeta>(
+    supersedes
+      ? {
+          ...DEFAULT_META,
+          title: supersedes.title,
+          documentType: supersedes.documentType,
+          domain: supersedes.domain,
+          classification: supersedes.classification,
+          allowedAgents: supersedes.allowedAgents,
+          language: supersedes.language,
+        }
+      : DEFAULT_META,
+  );
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +160,10 @@ function UploadDialog({ open, onOpenChange, supersedes }: { open: boolean; onOpe
             pick(e.dataTransfer.files?.[0]);
           }}
           onClick={() => inputRef.current?.click()}
-          className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm text-muted-foreground", dragging && "border-primary bg-muted")}
+          className={cn(
+            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm text-muted-foreground",
+            dragging && "border-primary/40 bg-primary-soft",
+          )}
         >
           <UploadCloudIcon className="size-6" />
           {file ? (
@@ -133,7 +173,13 @@ function UploadDialog({ open, onOpenChange, supersedes }: { open: boolean; onOpe
           ) : (
             t.knowledge.dropHere
           )}
-          <input ref={inputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.json,image/*" onChange={(e) => pick(e.target.files?.[0])} />
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.json,image/*"
+            onChange={(e) => pick(e.target.files?.[0])}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -154,7 +200,12 @@ function UploadDialog({ open, onOpenChange, supersedes }: { open: boolean; onOpe
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t.knowledge.relatedEntity} — الجدول</Label>
-            <Input placeholder="suppliers / products / destinations" dir="ltr" value={meta.relatedTable} onChange={(e) => setMeta({ ...meta, relatedTable: e.target.value.trim() })} />
+            <Input
+              placeholder="suppliers / products / destinations"
+              dir="ltr"
+              value={meta.relatedTable}
+              onChange={(e) => setMeta({ ...meta, relatedTable: e.target.value.trim() })}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t.knowledge.relatedEntity} — المعرّف</Label>
@@ -165,7 +216,10 @@ function UploadDialog({ open, onOpenChange, supersedes }: { open: boolean; onOpe
             <div className="flex flex-wrap gap-3 rounded-lg border p-2 text-sm">
               {AGENT_SLUGS.map((a) => (
                 <label key={a} className="flex items-center gap-1.5">
-                  <Checkbox checked={meta.allowedAgents.includes(a)} onCheckedChange={(v) => setMeta({ ...meta, allowedAgents: v ? [...meta.allowedAgents, a] : meta.allowedAgents.filter((x) => x !== a) })} />
+                  <Checkbox
+                    checked={meta.allowedAgents.includes(a)}
+                    onCheckedChange={(v) => setMeta({ ...meta, allowedAgents: v ? [...meta.allowedAgents, a] : meta.allowedAgents.filter((x) => x !== a) })}
+                  />
                   {labelOf(a, locale)}
                 </label>
               ))}
@@ -273,7 +327,7 @@ export default function KnowledgePage() {
                 </TableRow>
               )}
               {docs?.map((d) => (
-                <TableRow key={d._id} className={cn("cursor-pointer", d._id === selectedId && "bg-muted")} onClick={() => setSelectedId(d._id)}>
+                <TableRow key={d._id} className={cn("cursor-pointer", d._id === selectedId && "bg-primary-soft")} onClick={() => setSelectedId(d._id)}>
                   <TableCell className="font-mono text-xs" dir="ltr">
                     {d.businessId}
                   </TableCell>
@@ -311,7 +365,14 @@ export default function KnowledgePage() {
               </div>
               <div className="flex flex-wrap gap-1">
                 {(doc.lifecycle === "REVIEW" || doc.lifecycle === "DRAFT") && (
-                  <Button size="xs" onClick={() => approve({ documentId: doc._id }).then(() => toast.success(labelOf("ACTIVE", locale))).catch((e) => toast.error(e.message))}>
+                  <Button
+                    size="xs"
+                    onClick={() =>
+                      approve({ documentId: doc._id })
+                        .then(() => toast.success(labelOf("ACTIVE", locale)))
+                        .catch((e) => toast.error(e.message))
+                    }
+                  >
                     {t.knowledge.approve}
                   </Button>
                 )}
@@ -352,7 +413,8 @@ export default function KnowledgePage() {
                 <dd>{formatDate(doc.validTo, locale)}</dd>
                 <dt className="text-muted-foreground">الاستخراج</dt>
                 <dd>
-                  {doc.extractionStatus} {doc.extractionError ? `— ${doc.extractionError}` : `· ${doc.extractedCharCount ?? 0} حرفاً · ${doc.chunkCount} مقطعاً`}
+                  {doc.extractionStatus}{" "}
+                  {doc.extractionError ? `— ${doc.extractionError}` : `· ${doc.extractedCharCount ?? 0} حرفاً · ${doc.chunkCount} مقطعاً`}
                 </dd>
                 <dt className="text-muted-foreground">{t.knowledge.citations}</dt>
                 <dd>{doc.citationCount}</dd>
@@ -365,7 +427,7 @@ export default function KnowledgePage() {
                     النوع: {doc.aiMetadata.suggestedType ?? "—"} · النطاق: {doc.aiMetadata.suggestedDomain ?? "—"}
                   </div>
                   <div className="text-muted-foreground">{doc.aiMetadata.summary}</div>
-                  <div className="text-primary">{doc.aiMetadata.keywords.join(" · ")}</div>
+                  <div className="text-primary-text">{doc.aiMetadata.keywords.join(" · ")}</div>
                   <div className="text-muted-foreground">النموذج: {doc.aiMetadata.model}</div>
                 </div>
               )}
@@ -381,10 +443,21 @@ export default function KnowledgePage() {
                           </span>
                           {p.status === "PENDING" && (
                             <span className="flex gap-1">
-                              <Button size="xs" onClick={() => decideProposal({ documentId: doc._id, proposalId: p.id, decision: "ACCEPTED" }).then(() => toast.success(t.knowledge.acceptProposal)).catch((e) => toast.error(e.message))}>
+                              <Button
+                                size="xs"
+                                onClick={() =>
+                                  decideProposal({ documentId: doc._id, proposalId: p.id, decision: "ACCEPTED" })
+                                    .then(() => toast.success(t.knowledge.acceptProposal))
+                                    .catch((e) => toast.error(e.message))
+                                }
+                              >
                                 {t.knowledge.acceptProposal}
                               </Button>
-                              <Button size="xs" variant="outline" onClick={() => decideProposal({ documentId: doc._id, proposalId: p.id, decision: "REJECTED" })}>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => decideProposal({ documentId: doc._id, proposalId: p.id, decision: "REJECTED" })}
+                              >
                                 {t.common.reject}
                               </Button>
                             </span>
@@ -412,7 +485,7 @@ export default function KnowledgePage() {
               {doc.textPreview && (
                 <details>
                   <summary className="cursor-pointer text-xs">معاينة النص</summary>
-                  <div className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">{doc.textPreview}</div>
+                  <div className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary p-2 text-xs">{doc.textPreview}</div>
                 </details>
               )}
             </CardContent>
@@ -420,7 +493,21 @@ export default function KnowledgePage() {
         )}
       </div>
       <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
-      {versionOf && <UploadDialog open={!!versionOf} onOpenChange={(o) => !o && setVersionOf(null)} supersedes={{ _id: versionOf._id, title: versionOf.title, documentType: versionOf.documentType, domain: versionOf.domain, classification: versionOf.classification, allowedAgents: versionOf.allowedAgents, language: versionOf.language }} />}
+      {versionOf && (
+        <UploadDialog
+          open={!!versionOf}
+          onOpenChange={(o) => !o && setVersionOf(null)}
+          supersedes={{
+            _id: versionOf._id,
+            title: versionOf.title,
+            documentType: versionOf.documentType,
+            domain: versionOf.domain,
+            classification: versionOf.classification,
+            allowedAgents: versionOf.allowedAgents,
+            language: versionOf.language,
+          }}
+        />
+      )}
     </div>
   );
 }
