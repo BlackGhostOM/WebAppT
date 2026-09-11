@@ -65,6 +65,8 @@ export interface LlmResponse {
   usage: LlmUsage;
   model: string;
   provider: LlmProvider;
+  /** Provider-side degradations worth logging on the task (e.g. web search disabled after a config rejection). */
+  notes?: string[];
 }
 
 export interface LLMProvider {

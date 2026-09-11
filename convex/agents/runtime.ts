@@ -138,6 +138,7 @@ export const recordModelCall = internalMutation({
     escalated: v.boolean(),
     escalationReason: v.optional(v.string()),
     stopReason: v.string(),
+    notes: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -161,8 +162,19 @@ export const recordModelCall = internalMutation({
       cacheWriteTokens: args.usage.cacheWriteTokens,
       costUsd,
       durationMs: args.durationMs,
-      note: `stop_reason=${args.stopReason}${args.usage.webSearchRequests ? ` web_searches=${args.usage.webSearchRequests}` : ""}${args.escalated ? ` escalated=${args.escalationReason}` : ""}`,
+      note: `stop_reason=${args.stopReason}${args.usage.webSearchRequests ? ` web_searches=${args.usage.webSearchRequests}` : ""}${args.escalated ? ` escalated=${args.escalationReason}` : ""}${args.notes?.length ? ` ⚠️ ${args.notes.join(" | ")}` : ""}`,
     });
+    if (args.notes?.length) {
+      await ctx.db.insert("notifications", {
+        kind: "PROVIDER_DEGRADED",
+        title: `تراجع في مزوّد النموذج أثناء المهمة ${task.businessId}`,
+        body: args.notes.join("\n").slice(0, 1000),
+        severity: "WARNING",
+        relatedTable: "tasks",
+        relatedRecordId: args.taskId,
+        createdAt: Date.now(),
+      });
+    }
     await maybeNotifyBudgetThreshold(ctx);
     return costUsd;
   },

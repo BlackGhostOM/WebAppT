@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { internal } from "../../convex/_generated/api";
-import { fromAnthropicContent, toAnthropicMessages } from "../../convex/lib/llm/anthropic";
+import { createAnthropicProvider, fromAnthropicContent, toAnthropicMessages } from "../../convex/lib/llm/anthropic";
 import { createTask } from "../../convex/services/tasks";
 import { compactTranscript, sizeOf } from "../../convex/lib/llm/transcript";
 import type { LlmMessage } from "../../convex/lib/llm/types";
@@ -83,6 +83,36 @@ describe("web search provenance and round-tripping", () => {
     const tight = compactTranscript(messages, 40_000);
     const recentRaw = tight.flatMap((m) => m.content).filter((b) => b.type === "raw" && b.kind === "web_search_tool_result") as { block: { content: unknown[] } }[];
     expect(recentRaw.every((b) => b.block.content.length <= 5)).toBe(true);
+  });
+});
+
+describe("anthropic provider resilience", () => {
+  it("retries once without the web_search tool when the API rejects its configuration, and reports it", async () => {
+    const calls: { tools?: { type?: string; name?: string }[] }[] = [];
+    const client = {
+      messages: {
+        async create(params: { tools?: { type?: string; name?: string }[] }) {
+          calls.push(params);
+          if (calls.length === 1) {
+            throw Object.assign(new Error("400 invalid_request_error"), { status: 400, error: { error: { type: "invalid_request_error", message: "tools.3.web_search_20260209: Country code OM is not supported." } } });
+          }
+          return { id: "msg", type: "message", role: "assistant", model: "claude-sonnet-5", content: [{ type: "text", text: "حسناً" }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 10, output_tokens: 2 } };
+        },
+      },
+    };
+    const provider = await createAnthropicProvider("test-key", { client: client as never });
+    const request = { model: "claude-sonnet-5", systemPrompt: "s", companyContext: "c", messages: [{ role: "user" as const, content: [{ type: "text" as const, text: "hi" }] }], tools: [{ name: "get_kpis", description: "d", inputSchema: { type: "object", properties: {} } }], maxTokens: 50, webSearch: true, webSearchMaxUses: 8 };
+    const response = await provider.complete(request);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].tools?.some((t) => t.name === "web_search")).toBe(true);
+    expect(calls[1].tools?.some((t) => t.name === "web_search")).toBe(false);
+    expect(response.notes?.[0]).toMatch(/web_search_unavailable: .*Country code OM/);
+    expect(response.content).toEqual([{ type: "text", text: "حسناً" }]);
+
+    // Any other error still propagates untouched.
+    const failing = { messages: { async create() { throw Object.assign(new Error("overloaded"), { status: 529 }); } } };
+    const p2 = await createAnthropicProvider("test-key", { client: failing as never });
+    await expect(p2.complete(request)).rejects.toThrow(/overloaded/);
   });
 });
 

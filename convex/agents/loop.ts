@@ -173,6 +173,7 @@ export const run = internalAction({
         escalated,
         escalationReason: task.escalationReason,
         stopReason: response.stopReason,
+        notes: response.notes,
       });
 
       if (response.stopReason === "refusal") {
