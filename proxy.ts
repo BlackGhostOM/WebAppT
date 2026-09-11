@@ -6,8 +6,8 @@
 import { convexAuthNextjsMiddleware, createRouteMatcher, nextjsMiddlewareRedirect } from "@convex-dev/auth/nextjs/server";
 
 const isPublicRoute = createRouteMatcher(["/login", "/reset-password"]);
-// Website-facing pages: reachable by anyone, never redirect signed-in users away.
-const isPublicSitePage = createRouteMatcher(["/contact"]);
+// Website-facing pages (and the Sentry tunnel endpoint): reachable by anyone, never redirect signed-in users away.
+const isPublicSitePage = createRouteMatcher(["/contact", "/monitoring(.*)"]);
 
 export default convexAuthNextjsMiddleware(
   async (request, { convexAuth }) => {

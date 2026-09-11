@@ -7,8 +7,10 @@
  * Mock mode: without META_APP_SECRET the webhook accepts unsigned payloads and
  * logs that fact, so development can run before the Meta app is connected.
  */
-import { httpAction } from "../_generated/server";
+import { type ActionCtx, httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { errorMessage } from "../lib/errors";
+import { captureException } from "../lib/sentry";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +20,19 @@ const CORS = {
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+}
+
+/** Public endpoint wrapper: an unexpected failure is reported (Sentry) and answered with a generic 500, never a stack trace. */
+function guarded(opts: { name: string; headers?: Record<string, string> }, handler: (ctx: ActionCtx, request: Request) => Promise<Response>) {
+  return httpAction(async (ctx, request) => {
+    try {
+      return await handler(ctx, request);
+    } catch (e) {
+      console.error(`[${opts.name}]`, errorMessage(e));
+      await captureException(e, { tags: { area: "http", endpoint: opts.name }, extra: { method: request.method, path: new URL(request.url).pathname } });
+      return json({ error: "internal" }, 500, opts.headers);
+    }
+  });
 }
 
 function clientKey(request: Request): string {
@@ -56,7 +71,7 @@ interface MetaMessagingEvent {
   message?: { mid?: string; text?: string; is_echo?: boolean; attachments?: { type?: string }[] };
 }
 
-export const instagramWebhook = httpAction(async (ctx, request) => {
+export const instagramWebhook = guarded({ name: "instagram_webhook" }, async (ctx, request) => {
   const raw = await request.text();
   const secret = process.env.META_APP_SECRET;
   if (secret) {
@@ -95,7 +110,7 @@ export const instagramWebhook = httpAction(async (ctx, request) => {
 
 export const contactOptions = httpAction(async () => new Response(null, { status: 204, headers: CORS }));
 
-export const contactForm = httpAction(async (ctx, request) => {
+export const contactForm = guarded({ name: "contact_form", headers: CORS }, async (ctx, request) => {
   const allowed = await ctx.runMutation(internal.inbound.pipeline.rateLimit, { key: `contact:${clientKey(request)}`, limit: 10, windowMs: 60_000 });
   if (!allowed) return json({ error: "rate_limited" }, 429, CORS);
   let body: Record<string, unknown> = {};

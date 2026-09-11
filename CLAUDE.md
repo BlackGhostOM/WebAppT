@@ -93,6 +93,9 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
 ## Runtime modes
 - No `ANTHROPIC_API_KEY` → `mock` LLM provider (deterministic; never invents business data) and hashed mock embeddings.
 - No `AUTH_RESEND_KEY` → password-reset codes are printed in Convex logs.
+- No `SENTRY_DSN` (Convex) / `NEXT_PUBLIC_SENTRY_DSN` (Vercel) → error reporting is off; with them, `convex/lib/sentry.ts` (envelope
+  protocol over fetch: agent loop, public HTTP, `observability.runCron` around every cron) and `@sentry/nextjs` (three runtimes,
+  tunnel `/monitoring`) report with PII redacted by `lib/observability.ts`; expected app error codes are dropped.
 - Instagram: `integrations.instagramMode` = `mock` (default; inbox "simulate" button, unsigned webhooks accepted when
   META_APP_SECRET is unset, outbound logged only) or `live` (webhook signature enforced, replies sent via Graph API
   with META_PAGE_ACCESS_TOKEN). WhatsApp: not connected (outbound logged with deliveryStatus NOT_CONNECTED).

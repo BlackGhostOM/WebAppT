@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
 /**
@@ -15,4 +16,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Sentry build plugin. Runtime reporting is switched on by NEXT_PUBLIC_SENTRY_DSN
+ * alone; source-map upload additionally needs SENTRY_AUTH_TOKEN + SENTRY_ORG +
+ * SENTRY_PROJECT at build time (skipped silently otherwise). The tunnel route
+ * lets browser events reach Sentry through our own origin (ad blockers).
+ */
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  telemetry: false,
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+});

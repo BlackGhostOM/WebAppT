@@ -1,27 +1,51 @@
-import { cronJobs } from "convex/server";
+import { cronJobs, type FunctionReference, getFunctionName } from "convex/server";
 import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+/**
+ * Every job mutation runs through `observability.runCron`, which reports a
+ * failure to the error tracker before re-throwing. The mutation keeps its own
+ * all-or-nothing semantics; only the reporting hop is added.
+ */
+function job(name: string, fn: FunctionReference<"mutation", "internal">, args: Record<string, unknown> = {}) {
+  return { fn: getFunctionName(fn), args, job: name };
+}
+
 // Daily freshness engine + expiry alerts (30/7 days) + data gaps. 02:00 UTC = 06:00 Muscat.
-crons.daily("freshness engine", { hourUTC: 2, minuteUTC: 0 }, internal.maintenance.recomputeFreshness, {});
+crons.daily("freshness engine", { hourUTC: 2, minuteUTC: 0 }, internal.observability.runCron, job("freshness", internal.maintenance.recomputeFreshness));
 
 // Stuck-task watchdog.
-crons.interval("task watchdog", { minutes: 15 }, internal.maintenance.watchdog, {});
+crons.interval("task watchdog", { minutes: 15 }, internal.observability.runCron, job("watchdog", internal.maintenance.watchdog));
 
 // Owner digest (no model call). 03:00 UTC = 07:00 Muscat.
-crons.daily("daily digest", { hourUTC: 3, minuteUTC: 0 }, internal.scheduled.run, { job: "dailyDigest" });
+crons.daily("daily digest", { hourUTC: 3, minuteUTC: 0 }, internal.observability.runCron, job("dailyDigest", internal.scheduled.run, { job: "dailyDigest" }));
 
 // Weekly executive summary (executive agent task). Sunday 03:30 UTC = 07:30 Muscat (Omani work week starts Sunday).
-crons.weekly("weekly executive summary", { dayOfWeek: "sunday", hourUTC: 3, minuteUTC: 30 }, internal.scheduled.run, { job: "weeklyExecutiveSummary" });
+crons.weekly(
+  "weekly executive summary",
+  { dayOfWeek: "sunday", hourUTC: 3, minuteUTC: 30 },
+  internal.observability.runCron,
+  job("weeklyExecutiveSummary", internal.scheduled.run, { job: "weeklyExecutiveSummary" }),
+);
 
 // Post-sale follow-ups: plan from confirmed bookings and propose what is due (sent only after approval). 04:00 UTC = 08:00 Muscat.
-crons.daily("lifecycle follow-ups", { hourUTC: 4, minuteUTC: 0 }, internal.scheduled.run, { job: "lifecycleFollowUps" });
+crons.daily(
+  "lifecycle follow-ups",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.observability.runCron,
+  job("lifecycleFollowUps", internal.scheduled.run, { job: "lifecycleFollowUps" }),
+);
 
 // Overdue lead follow-ups → capped sales-agent tasks. 05:00 UTC = 09:00 Muscat.
-crons.daily("lead follow-up reminders", { hourUTC: 5, minuteUTC: 0 }, internal.scheduled.run, { job: "leadFollowUpReminders" });
+crons.daily(
+  "lead follow-up reminders",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.observability.runCron,
+  job("leadFollowUpReminders", internal.scheduled.run, { job: "leadFollowUpReminders" }),
+);
 
 // Owner-defined schedules (customSchedules): fire what is due, then advance.
-crons.interval("custom schedules", { minutes: 5 }, internal.customSchedules.runDue, {});
+crons.interval("custom schedules", { minutes: 5 }, internal.observability.runCron, job("customSchedules", internal.customSchedules.runDue));
 
 export default crons;
