@@ -10,6 +10,8 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { APPROVAL_KINDS, FOLLOW_UP_KINDS } from "@/convex/lib/vocab";
 import type { ar } from "@/lib/i18n/ar";
 import { AgentBadge, SeverityBadge, StatusBadge, TrustBadge } from "@/components/badges";
+import { CustomSchedulesPanel } from "@/components/settings/custom-schedules";
+import { type EditableUser, UserEditDialog } from "@/components/settings/user-edit-dialog";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -418,6 +420,7 @@ function ScheduledTab({ value, onSave, isOwner }: { value: ScheduledValue; onSav
     { key: "weeklyExecutiveSummary", label: t.settings.weeklySummary, job: "weeklyExecutiveSummary" },
   ];
   return (
+    <div className="space-y-4">
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
@@ -467,6 +470,8 @@ function ScheduledTab({ value, onSave, isOwner }: { value: ScheduledValue; onSav
           ))}
         </CardContent>
       </Card>
+    </div>
+    <CustomSchedulesPanel isOwner={isOwner} />
     </div>
   );
 }
@@ -533,6 +538,7 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
   const setAccess = useMutation(api.settings.setUserAccess);
   const [form, setForm] = useState({ email: "", password: "", name: "", role: "staff" });
   const [busy, setBusy] = useState(false);
+  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   if (!isOwner) return <EmptyState>إدارة المستخدمين متاحة للمالك فقط.</EmptyState>;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -548,10 +554,13 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
                   {u.email}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {u.name ?? ""} · {u.role === "owner" ? "المالك" : "موظف"} {u.disabled ? `· ${t.settings.disabled}` : ""} · آخر دخول {formatDate(u.lastLoginAt, locale, true)}
+                  {u.name ?? ""}{u.phone ? ` · ${u.phone}` : ""} · {u.role === "owner" ? "المالك" : "موظف"} {u.disabled ? `· ${t.settings.disabled}` : ""} · آخر دخول {formatDate(u.lastLoginAt, locale, true)}
                 </div>
               </div>
               <div className="flex flex-wrap gap-1">
+                <Button size="xs" variant="secondary" onClick={() => setEditingUser({ _id: u._id, email: u.email, name: u.name, phone: u.phone, locale: u.locale })}>
+                  {t.settings.editUser}
+                </Button>
                 <Button size="xs" variant="outline" onClick={() => setAccess({ userId: u._id, role: u.role === "owner" ? "staff" : "owner" }).catch((e) => toast.error(e.message))} disabled={u._id === meId}>
                   {u.role === "owner" ? "→ موظف" : "→ مالك"}
                 </Button>
@@ -576,6 +585,7 @@ function UsersTab({ isOwner, meId }: { isOwner: boolean; meId?: Id<"users"> }) {
           ))}
         </CardContent>
       </Card>
+      {editingUser && <UserEditDialog key={editingUser._id} user={editingUser} onClose={() => setEditingUser(null)} />}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t.settings.addUser}</CardTitle>

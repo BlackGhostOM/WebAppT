@@ -21,4 +21,7 @@ crons.daily("lifecycle follow-ups", { hourUTC: 4, minuteUTC: 0 }, internal.sched
 // Overdue lead follow-ups → capped sales-agent tasks. 05:00 UTC = 09:00 Muscat.
 crons.daily("lead follow-up reminders", { hourUTC: 5, minuteUTC: 0 }, internal.scheduled.run, { job: "leadFollowUpReminders" });
 
+// Owner-defined schedules (customSchedules): fire what is due, then advance.
+crons.interval("custom schedules", { minutes: 5 }, internal.customSchedules.runDue, {});
+
 export default crons;

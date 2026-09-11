@@ -7,7 +7,7 @@
  * future data model. Every enumerated field is constrained to the controlled
  * vocabulary in `./lib/vocab.ts`.
  *
- * Schema version: 1.2 (see docs/DATA_CHANGE_PROCESS.md).
+ * Schema version: 1.3 (see docs/DATA_CHANGE_PROCESS.md).
  */
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
@@ -66,6 +66,39 @@ export default defineSchema({
   // Platform: counters, settings, reference data
   // =========================================================================
   counters: defineTable({ key: v.string(), value: v.number() }).index("by_key", ["key"]),
+
+  /**
+   * Owner-defined recurring agent tasks (schema 1.3): "every Sunday 08:00 ask the
+   * sales agent to review the pipeline". A cron turns due schedules into ordinary
+   * tasks (origin system), so routing, budgets and approvals apply unchanged.
+   */
+  customSchedules: defineTable({
+    businessId: v.string(),
+    title: v.string(),
+    agentSlug: literals(V.AGENT_SLUGS),
+    request: v.string(),
+    priority: literals(V.TASK_PRIORITIES),
+    frequency: literals(V.SCHEDULE_FREQUENCIES),
+    /** 0 = Sunday … 6 = Saturday (WEEKLY). */
+    dayOfWeek: v.optional(v.number()),
+    /** 1–28 (MONTHLY). */
+    dayOfMonth: v.optional(v.number()),
+    /** Local time in the company timezone. */
+    hour: v.number(),
+    minute: v.number(),
+    /** Absolute time for ONCE. */
+    runAt: v.optional(v.number()),
+    enabled: v.boolean(),
+    nextRunAt: v.optional(v.number()),
+    lastRunAt: v.optional(v.number()),
+    lastTaskId: v.optional(v.id("tasks")),
+    lastSkipReason: v.optional(v.string()),
+    runCount: v.number(),
+    createdBy: actorValidator,
+    updatedBy: actorValidator,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_enabled_nextRunAt", ["enabled", "nextRunAt"]),
 
   /** Fixed-window rate limits for public HTTP endpoints (contact form, webhooks). */
   httpRateLimits: defineTable({ key: v.string(), windowStart: v.number(), count: v.number() }).index("by_key", ["key"]),

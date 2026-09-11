@@ -1,4 +1,4 @@
-# قاموس البيانات — Data Dictionary (المخطط 1.2)
+# قاموس البيانات — Data Dictionary (المخطط 1.3)
 
 المصدر التنفيذي: `convex/schema.ts` (المخطط)، `convex/lib/vocab.ts` (القيم المسموحة)، `lib/entities.ts` (النماذج/قواعد الإدخال اليدوي).
 الحساسية: PUBLIC · INTERNAL · CONFIDENTIAL · CUSTOMER_CONFIDENTIAL · STRICTLY_CONFIDENTIAL. الخطورة D1–D4 وفق `convex/lib/audit.ts`.
@@ -234,8 +234,13 @@ invoices, payments, refunds, profitability · qaReviews, riskRegister, complianc
 | `memories` | businessId, type, origin, status, agentSlug, content (≤2000), subject?{table,recordId}, confidence?, expiresAt?, retentionPolicy, proposedBy, reviewedBy?, reviewedAt?, taskId?, createdAt | استنتاج الوكيل PROPOSED حتى يعتمده المالك |
 | `dataQualityRules` | name, table, field?, dimension, description, weight, severity, enabled, createdAt | — |
 
+## المهام المجدولة المخصصة (1.3)
+| الجدول | الحقول | ملاحظات |
+|---|---|---|
+| `customSchedules` | businessId (SCH-…), title (2–120), agentSlug ∈ AGENT_SLUGS, request (10–4000), priority ∈ TASK_PRIORITIES, frequency ∈ SCHEDULE_FREQUENCIES (ONCE/DAILY/WEEKLY/MONTHLY), dayOfWeek? (0 الأحد–6 السبت، WEEKLY), dayOfMonth? (1–28، MONTHLY), hour (0–23)، minute (0–59) بتوقيت الشركة، runAt? (ONCE)، enabled, nextRunAt?, lastRunAt?, lastTaskId?, lastSkipReason? (emergency_stop/agent_disabled), runCount, createdBy, updatedBy, createdAt, updatedAt | يديرها المالك فقط (D2). كرون كل 5 دقائق (`internal.customSchedules.runDue`) يحوّل المستحق إلى مهمة origin=system بطالب `cron:custom:<SCH>` ثم يحسب الموعد التالي من الآن (الفتحات المفقودة لا تُعاد)؛ ONCE تُعطَّل بعد موعدها. الإكمال يُنبّه المالك (`SCHEDULED_TASK_DONE`). فهرس `by_enabled_nextRunAt` |
+
 ## المنصة والمصادقة
-- `users` (Convex Auth + role ∈ owner/staff, disabled, locale, lastLoginAt, createdByUserId) — تغيير الدور/التعطيل **D4**.
+- `users` (Convex Auth + role ∈ owner/staff, disabled, locale, phone?, lastLoginAt, createdByUserId) — تغيير الدور/التعطيل **D4**؛ المالك يعدّل الاسم/الهاتف/اللغة (D2) والبريد (D4، يحرّك `authAccounts.providerAccountId`) عبر `settings.updateUser`.
 - `authSessions`, `authAccounts`, `authRefreshTokens`, `authVerificationCodes`, `authVerifiers`, `authRateLimits` — جداول Convex Auth (كلمات المرور مُجزّأة Scrypt).
 - `counters {key, value}`, `settings {key, value, updatedAt, updatedBy}` (تغيير D3), `notifications`, `conversations`, `chatMessages`.
 - بيانات مرجعية: `refCountries {code, iso3, nameAr, nameEn, phonePrefix?, active}`, `refCurrencies {code, nameAr, nameEn, decimals, rateToBase, rateSource, rateUpdatedAt, active}`, `refLanguages {code, nameAr, nameEn, rtl}`, `refServiceTypes {code, nameAr, nameEn, componentType, defaultRateBasis}`, `refPaymentMethods {code, nameAr, nameEn, active}`, `refCancellationTypes {code, nameAr, nameEn, description}`.

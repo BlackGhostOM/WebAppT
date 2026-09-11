@@ -29,6 +29,7 @@ convex/
   inbound/                http.ts (webhook + contact form), pipeline.ts (internal receive), delivery.ts (Graph API send)
   inbox.ts / followUps.ts owner-facing unified inbox API and post-sale follow-ups API
   reports.ts / scheduled.ts reports API (Phase 4) and scheduled-jobs API (cron entry + owner run-now + status)
+  customSchedules.ts      owner-defined recurring agent tasks (schema 1.3; lib/schedule.ts holds the timezone math)
   lib/vocab.ts            Controlled vocabulary (as const) — the ONLY place statuses/types live
   lib/baseFields.ts       Shared provenance/trust/validity/version fields + money & citation validators
   lib/ids.ts              businessId generator (counters table)
@@ -103,6 +104,8 @@ Windows note: Node lives in `%LOCALAPPDATA%\nodejs` (portable install, on the us
   stop and agent enablement, and audits one SYSTEM row per run. Model-backed jobs create tasks with origin `system`
   (requestedBy `cron:<job>`); `runtime.completeTask` notifies the owner for those.
 - Reports are pure read models in `services/reports.ts`; never store computed KPIs.
+- Owner-defined schedules (`customSchedules`) fire through `internal.customSchedules.runDue` every 5 minutes as tasks with
+  origin `system` / requestedBy `cron:custom:<SCH id>`; a skipped slot is never replayed.
 - The header bell uses `settings.attention` (all owner queues + unread notifications, highest severity); add new
   owner-facing queues there, not as ad-hoc dots.
 

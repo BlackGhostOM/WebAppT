@@ -213,6 +213,9 @@ export const TASK_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
 
 export const TASK_ORIGINS = ["owner", "customer", "system", "agent"] as const;
 
+/** Owner-defined recurring agent tasks (schema 1.3). */
+export const SCHEDULE_FREQUENCIES = ["ONCE", "DAILY", "WEEKLY", "MONTHLY"] as const;
+
 export const TASK_RUN_STEP_KINDS = ["MODEL_CALL", "TOOL_CALL", "TOOL_RESULT", "APPROVAL_REQUESTED", "SUBTASK_CREATED", "NOTE", "CANCELLED", "ERROR", "FINAL"] as const;
 
 export const TOOL_KINDS = ["read", "write_internal", "external"] as const;
@@ -405,6 +408,7 @@ export type ToolKind = (typeof TOOL_KINDS)[number];
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number];
 export type FollowUpStatus = (typeof FOLLOW_UP_STATUSES)[number];
+export type ScheduleFrequency = (typeof SCHEDULE_FREQUENCIES)[number];
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 export type SeverityClass = (typeof SEVERITY_CLASSES)[number];

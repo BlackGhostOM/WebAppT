@@ -13,7 +13,7 @@ import { ownerActor, requireOwner, requireUser, requireUserIdInAction } from "./
 import { appendAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
 import { DEFAULT_SETTINGS, getAllSettings, type SettingKey, setSetting, SETTING_KEYS } from "./lib/settings";
-import { APPROVAL_KINDS, FOLLOW_UP_KINDS, isOneOf, USER_ROLES } from "./lib/vocab";
+import { APPROVAL_KINDS, FOLLOW_UP_KINDS, isOneOf, LANGUAGES, USER_ROLES } from "./lib/vocab";
 import { listAutoApproved, NEVER_AUTO_APPROVE } from "./services/approvals";
 
 export const getAll = query({
@@ -115,7 +115,7 @@ export const listUsers = query({
   handler: async (ctx) => {
     await requireOwner(ctx);
     const users = await ctx.db.query("users").take(100);
-    return users.map((u) => ({ _id: u._id, email: u.email, name: u.name, role: u.role ?? "staff", disabled: u.disabled ?? false, lastLoginAt: u.lastLoginAt, createdAt: u._creationTime }));
+    return users.map((u) => ({ _id: u._id, email: u.email, name: u.name, phone: u.phone, locale: u.locale ?? "ar", role: u.role ?? "staff", disabled: u.disabled ?? false, lastLoginAt: u.lastLoginAt, createdAt: u._creationTime }));
   },
 });
 
@@ -184,6 +184,61 @@ export const setUserAccess = mutation({
     if (disabled !== undefined) patch.disabled = disabled;
     await ctx.db.patch(userId, patch);
     await appendAudit(ctx, { actor: ownerActor(owner), table: "users", recordId: userId, event: "UPDATE", oldValue: { role: target.role, disabled: target.disabled }, newValue: patch, severity: "D4" });
+    return null;
+  },
+});
+
+/**
+ * Owner edits a user's profile. Changing the e-mail also moves the password
+ * account (Convex Auth keys it by e-mail), so the person signs in with the new
+ * address from then on; the change is D4 like any identity change.
+ */
+export const updateUser = mutation({
+  args: { userId: v.id("users"), name: v.optional(v.string()), email: v.optional(v.string()), phone: v.optional(v.string()), locale: v.optional(v.string()) },
+  handler: async (ctx, { userId, name, email, phone, locale }) => {
+    const owner = await requireOwner(ctx);
+    const target = await ctx.db.get(userId);
+    if (!target) throw appError("NOT_FOUND", "المستخدم غير موجود");
+    const patch: Partial<Doc<"users">> = {};
+    const before: Record<string, unknown> = {};
+    let severity: "D2" | "D4" = "D2";
+    if (name !== undefined) {
+      const trimmed = name.trim();
+      if (trimmed.length > 120) throw appError("VALIDATION", "name: الحد الأقصى 120 حرفاً", { field: "name" });
+      patch.name = trimmed || undefined;
+      before.name = target.name;
+    }
+    if (phone !== undefined) {
+      const trimmed = phone.trim();
+      if (trimmed && trimmed.replace(/\D/g, "").length < 7) throw appError("VALIDATION", "phone: رقم هاتف غير صالح", { field: "phone" });
+      patch.phone = trimmed || undefined;
+      before.phone = target.phone;
+    }
+    if (locale !== undefined) {
+      if (!isOneOf(LANGUAGES, locale)) throw appError("VALIDATION", "locale: لغة غير معيارية", { field: "locale" });
+      patch.locale = locale;
+      before.locale = target.locale;
+    }
+    if (email !== undefined) {
+      const normalized = email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw appError("VALIDATION", "email: بريد غير صالح", { field: "email" });
+      if (normalized !== target.email) {
+        const clash = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", normalized)).unique();
+        if (clash && clash._id !== userId) throw appError("DUPLICATE", "يوجد مستخدم آخر بهذا البريد");
+        const account = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "password")).unique();
+        if (account) {
+          const taken = await ctx.db.query("authAccounts").withIndex("providerAndAccountId", (q) => q.eq("provider", "password").eq("providerAccountId", normalized)).unique();
+          if (taken && taken._id !== account._id) throw appError("DUPLICATE", "يوجد حساب دخول آخر بهذا البريد");
+          await ctx.db.patch(account._id, { providerAccountId: normalized });
+        }
+        patch.email = normalized;
+        before.email = target.email;
+        severity = "D4";
+      }
+    }
+    if (Object.keys(patch).length === 0) return null;
+    await ctx.db.patch(userId, patch);
+    await appendAudit(ctx, { actor: ownerActor(owner), table: "users", recordId: userId, event: "UPDATE", oldValue: before, newValue: patch, severity });
     return null;
   },
 });

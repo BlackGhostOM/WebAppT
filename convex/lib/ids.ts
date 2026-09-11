@@ -40,6 +40,7 @@ export const ID_PREFIXES = {
   knowledgeGaps: "KGP",
   memories: "MEM",
   followUps: "FUP",
+  customSchedules: "SCH",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;
